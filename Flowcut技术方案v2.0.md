@@ -1441,7 +1441,7 @@ src/
             maxSpeed === s ? 'border-primary bg-primary-soft text-primary' : 'border-border text-txt-dim']"
           @click="$emit('update:maxSpeed', s)">
           {{ s }}
-          <div class="text-[10px] opacity-60">{{ { '2x': '轻微加速', '3x': '适中', '5x': '快闪' }[s] }}</div>
+          <div class="text-[10px] opacity-60">{  { { '2x': '轻微加速', '3x': '适中', '5x': '快闪' }[s] }}</div>
         </button>
       </div>
     </div>
