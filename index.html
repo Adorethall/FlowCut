@@ -3,633 +3,1191 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FlowCut - 素材采集与自动化剪辑工作流</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      colors: {
-        bg: '#0a0a0f',
-        surface: '#12111a',
-        card: '#1a1824',
-        border: '#2a2535',
-        'border-light': '#3a3345',
-        primary: '#ff3d8b',
-        'primary-dim': '#d6327a',
-        'primary-soft': 'rgba(255,61,139,0.12)',
-        'primary-glow': 'rgba(255,61,139,0.35)',
-        accent: '#ff8f5c',
-        info: '#6c8cff',
-        warn: '#ffb020',
-        txt: '#f0e8ec',
-        'txt-dim': '#908090',
-        'txt-muted': '#504050',
-      },
-      fontFamily: {
-        display: ['Space Grotesk', 'Noto Sans SC', 'sans-serif'],
-        body: ['Noto Sans SC', 'sans-serif'],
-      }
-    }
-  }
-}
-</script>
+<title>FlowCut - 素材采集 × 智能混剪</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Noto Sans SC',sans-serif;background:#0a0a0f;color:#f0e8ec;overflow:hidden;height:100vh}
-  ::-webkit-scrollbar{width:5px}
-  ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{background:#2a2535;border-radius:4px}
-  ::-webkit-scrollbar-thumb:hover{background:#3a3345}
+/* ========== 基础重置与变量 ========== */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0f;--surface:#12111a;--card:#1a1824;--border:#2a2535;--border-light:#3a3345;
+  --primary:#ff3d8b;--primary-deep:#d6327a;--primary-soft:rgba(255,61,139,.12);--primary-glow:rgba(255,61,139,.35);
+  --orange:#ff8f5c;--blue:#6c8cff;--yellow:#ffb020;
+  --txt:#f0e8ec;--txt-dim:#908090;--txt-muted:#504050;
+  --font-brand:'Space Grotesk',sans-serif;--font-body:'Noto Sans SC',sans-serif;--font-mono:'Courier New',monospace;
+  --radius:10px;--radius-sm:6px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--font-body);font-size:14px;line-height:1.5}
+a{text-decoration:none;color:inherit}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit;color:var(--txt);background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;outline:none;font-size:13px}
+input:focus,select:focus{border-color:var(--primary)}
 
-  .sidebar-item{transition:all .2s;position:relative}
-  .sidebar-item::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:0;background:#ff3d8b;border-radius:0 3px 3px 0;transition:height .2s}
-  .sidebar-item.active::before{height:60%}
-  .sidebar-item.active{background:rgba(255,61,139,.08);color:#ff3d8b}
-  .sidebar-item:hover:not(.active){background:rgba(255,255,255,.03)}
+/* ========== 布局 ========== */
+.app{display:flex;height:100vh;position:relative;overflow:hidden}
 
-  .material-card{transition:all .25s cubic-bezier(.4,0,.2,1)}
-  .material-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.5);border-color:rgba(255,61,139,.35)}
-  .material-card .play-overlay{opacity:0;transition:opacity .2s}
-  .material-card:hover .play-overlay{opacity:1}
+/* 背景装饰 */
+.app::before,.app::after{content:'';position:fixed;border-radius:50%;pointer-events:none;filter:blur(100px);z-index:0}
+.app::before{width:400px;height:400px;background:rgba(255,61,139,.06);top:-80px;right:10%;animation:floatBlob 12s ease-in-out infinite}
+.app::after{width:300px;height:300px;background:rgba(255,61,139,.04);bottom:10%;left:30%;animation:floatBlob 12s ease-in-out infinite reverse}
+@keyframes floatBlob{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.05)}66%{transform:translate(-20px,15px) scale(.95)}}
 
-  .tag-btn{transition:all .15s}
-  .tag-btn.active{background:rgba(255,61,139,.15);color:#ff3d8b;border-color:rgba(255,61,139,.4)}
-  .tag-btn:hover:not(.active){border-color:rgba(255,255,255,.15)}
+/* ========== 侧边栏 ========== */
+.sidebar{width:220px;min-width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:10;position:relative}
+.sidebar::after{content:'';position:absolute;bottom:60px;right:-40px;width:120px;height:120px;background:rgba(255,61,139,.05);border-radius:50%;filter:blur(60px);pointer-events:none}
+.sidebar-brand{padding:24px 20px 8px}
+.sidebar-brand h1{font-family:var(--font-brand);font-size:22px;font-weight:700;color:var(--txt);letter-spacing:-.5px}
+.sidebar-brand p{font-size:11px;color:var(--txt-dim);margin-top:2px}
+.sidebar-nav{flex:1;padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);font-size:13px;color:var(--txt-dim);transition:all .2s;cursor:pointer;position:relative}
+.nav-item i{width:18px;text-align:center;font-size:14px}
+.nav-item:hover{color:var(--txt);background:rgba(255,255,255,.03)}
+.nav-item.active{color:var(--primary);background:var(--primary-soft)}
+.nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:18px;background:var(--primary);border-radius:0 3px 3px 0}
+.nav-badge{margin-left:auto;background:var(--primary);color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;min-width:18px;text-align:center}
+.nav-group-label{font-size:10px;color:var(--txt-muted);text-transform:uppercase;letter-spacing:1px;padding:12px 12px 4px;font-weight:600}
+.nav-sub{padding-left:18px}
+.sidebar-user{padding:16px 16px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sidebar-avatar{width:32px;height:32px;border-radius:50%;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--primary)}
+.sidebar-userinfo p:first-child{font-size:12px;font-weight:600;color:var(--txt)}
+.sidebar-userinfo p:last-child{font-size:10px;color:var(--txt-muted)}
 
-  .step-circle{transition:all .3s}
-  .step-circle.active{background:#ff3d8b;color:#0a0a0f;box-shadow:0 0 20px rgba(255,61,139,.4)}
-  .step-circle.done{background:#ff3d8b;color:#0a0a0f}
-  .step-line{transition:background .3s}
-  .step-line.active{background:#ff3d8b}
+/* ========== 主内容区 ========== */
+.main{flex:1;overflow-y:auto;position:relative;z-index:1}
+.page{display:none;padding:32px;animation:fadeIn .3s ease}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.page-header{margin-bottom:24px}
+.page-header h2{font-size:20px;font-weight:600;color:var(--txt)}
+.page-header p{font-size:13px;color:var(--txt-dim);margin-top:4px}
 
-  .theme-card{transition:all .2s;cursor:pointer}
-  .theme-card:hover{border-color:rgba(255,61,139,.4);background:rgba(255,61,139,.04)}
-  .theme-card.selected{border-color:#ff3d8b;background:rgba(255,61,139,.08);box-shadow:0 0 20px rgba(255,61,139,.15)}
+/* ========== 通用组件 ========== */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:all .25s cubic-bezier(.4,0,.2,1)}
+.card:hover{border-color:var(--border-light);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stat-card{position:relative;overflow:hidden}
+.stat-card .stat-icon{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.stat-card .stat-deco{position:absolute;bottom:-12px;right:-12px;width:60px;height:60px;border-radius:50%;opacity:.06}
+.stat-card .stat-label{font-size:12px;color:var(--txt-dim);margin-bottom:6px}
+.stat-card .stat-value{font-family:var(--font-brand);font-size:26px;font-weight:700;color:var(--txt)}
+.stat-card .stat-sub{font-size:11px;color:var(--txt-muted);margin-top:4px}
+.tag-btn{display:inline-flex;align-items:center;padding:5px 12px;border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--txt-dim);cursor:pointer;transition:all .2s;gap:4px}
+.tag-btn:hover{border-color:var(--border-light);color:var(--txt)}
+.tag-btn.active{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+.switch{width:40px;height:22px;border-radius:11px;background:#333;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.switch.on{background:var(--primary)}
+.switch::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+.switch.on::after{transform:translateX(18px)}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#fff;padding:8px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;transition:all .25s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary:hover{box-shadow:0 0 20px var(--primary-glow);transform:translateY(-1px)}
+.btn-outline{border:1px solid var(--border);color:var(--txt-dim);padding:7px 16px;border-radius:var(--radius-sm);font-size:13px;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-outline:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+.progress-bar{height:4px;background:#1f1d2b;border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--primary-deep));border-radius:2px;transition:width .5s ease}
+.toast{position:fixed;top:20px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 20px;font-size:13px;display:flex;align-items:center;gap:10px;z-index:9999;animation:toastIn .35s cubic-bezier(.4,0,.2,1);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+@keyframes toastIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
 
-  .config-group{border-left:2px solid #2a2535;padding-left:16px;transition:border-color .2s}
-  .config-group:hover{border-left-color:#ff3d8b}
+/* ========== 工作台 ========== */
+.quick-actions{display:flex;gap:12px;margin-bottom:24px}
+.recent-tasks{margin-top:24px}
+.recent-tasks h3{font-size:14px;font-weight:600;margin-bottom:12px}
+.task-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface);border-radius:var(--radius-sm);margin-bottom:6px;border:1px solid var(--border);transition:border-color .2s}
+.task-row:hover{border-color:var(--border-light)}
+.task-row .task-icon{width:32px;height:32px;border-radius:6px;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--txt-muted);font-size:13px}
+.task-row .task-info{flex:1}
+.task-row .task-info p{font-size:12px;font-weight:500}
+.task-row .task-info span{font-size:11px;color:var(--txt-muted)}
+.status-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+.status-tag.done{background:rgba(34,197,94,.12);color:#22c55e}
+.status-tag.processing{background:rgba(108,140,255,.12);color:var(--blue)}
+.status-tag.processing::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--blue);animation:pulse 1.5s infinite}
+.status-tag.failed{background:rgba(255,143,92,.12);color:var(--orange)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.theme-cloud{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.theme-tag{display:flex;align-items:center;gap:6px;padding:6px 14px;background:var(--card);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--txt-dim);cursor:pointer;transition:all .2s}
+.theme-tag:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+.theme-tag i{font-size:11px}
 
-  .task-card{transition:all .2s}
-  .task-card:hover{border-color:rgba(255,255,255,.1)}
+/* ========== 素材库 ========== */
+.filter-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.search-box{position:relative;flex:0 0 260px}
+.search-box input{width:100%;padding-left:34px;background:var(--surface)}
+.search-box i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt-muted);font-size:13px}
+.filter-group{display:flex;align-items:center;gap:6px}
+.filter-group label{font-size:11px;color:var(--txt-muted);white-space:nowrap}
+.material-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.material-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all .25s cubic-bezier(.4,0,.2,1);cursor:pointer;position:relative}
+.material-card:hover{border-color:var(--border-light);transform:translateY(-4px);box-shadow:0 12px 32px rgba(0,0,0,.4)}
+.material-card .thumb{position:relative;width:100%;padding-top:133.33%;background:var(--surface);overflow:hidden}
+.material-card .thumb img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+.material-card .thumb .duration{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;font-family:var(--font-mono)}
+.material-card .thumb .source-badge{position:absolute;top:8px;left:8px;display:flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,.6);color:#fff}
+/* ★ 新增：素材类型标签 */
+.material-card .thumb .type-badge{position:absolute;bottom:8px;left:8px;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:500;backdrop-filter:blur(4px)}
+.type-badge.food_action{background:rgba(255,61,139,.2);color:#ff6ba6;border:1px solid rgba(255,61,139,.3)}
+.type-badge.people_talking{background:rgba(108,140,255,.2);color:#8fa8ff;border:1px solid rgba(108,140,255,.3)}
+.type-badge.scenery{background:rgba(34,197,94,.2);color:#4ade80;border:1px solid rgba(34,197,94,.3)}
+.type-badge.product_show{background:rgba(255,176,32,.2);color:#ffc94d;border:1px solid rgba(255,176,32,.3)}
+.type-badge.ambience{background:rgba(168,85,247,.2);color:#c084fc;border:1px solid rgba(168,85,247,.3)}
+.type-badge.other{background:rgba(255,255,255,.08);color:#aaa;border:1px solid rgba(255,255,255,.1)}
+.type-badge.pending{background:rgba(255,255,255,.06);color:var(--txt-muted);border:1px solid var(--border);font-style:italic}
+/* ★ 新增：高光指示条 */
+.highlight-bar{position:absolute;bottom:0;left:0;width:100%;height:3px;background:rgba(255,255,255,.08);overflow:hidden}
+.highlight-bar .seg{position:absolute;top:0;height:100%;background:var(--primary);border-radius:0 2px 2px 0;opacity:.7}
+.material-card .thumb .play-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.3);opacity:0;transition:opacity .2s}
+.material-card:hover .thumb .play-overlay{opacity:1}
+.play-overlay .play-btn{width:40px;height:40px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;box-shadow:0 0 20px var(--primary-glow)}
+.material-card .card-body{padding:10px 12px}
+.material-card .card-body .title{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px}
+.material-card .card-body .meta{font-size:10px;color:var(--txt-muted);display:flex;align-items:center;gap:6px}
+.material-card .card-body .motion-score{font-size:10px;color:var(--primary);font-weight:500}
+.material-card .card-body .tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.material-card .card-body .tags span{font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surface);color:var(--txt-dim);border:1px solid var(--border)}
+.material-card .check-btn{position:absolute;top:8px;right:8px;z-index:2;width:22px;height:22px;border-radius:4px;border:1.5px solid rgba(255,255,255,.4);background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:10px;color:transparent}
+.material-card .check-btn.checked{border-color:var(--primary);background:var(--primary);color:#fff}
 
-  .btn-primary{background:linear-gradient(135deg,#ff3d8b,#d6327a);color:#fff;font-weight:600;transition:all .2s;border:none}
-  .btn-primary:hover{box-shadow:0 4px 24px rgba(255,61,139,.4);transform:translateY(-1px)}
-  .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+/* ========== 剪辑工作流 ========== */
+.step-bar{display:flex;align-items:center;gap:0;margin-bottom:32px;padding:0 40px}
+.step-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--txt-muted)}
+.step-dot{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .3s;flex-shrink:0}
+.step-item.current .step-dot{border-color:var(--primary);background:var(--primary);color:#fff;box-shadow:0 0 16px var(--primary-glow)}
+.step-item.done .step-dot{border-color:var(--primary);background:var(--primary);color:#fff}
+.step-item.current .step-label{color:var(--primary);font-weight:500}
+.step-line{flex:1;height:2px;background:var(--border);margin:0 12px;min-width:40px}
+.step-line.done{background:var(--primary)}
+.step-content{display:none}
+.step-content.active{display:block;animation:fadeIn .3s ease}
+/* Step1 主题选择 */
+.theme-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.theme-card{background:var(--card);border:2px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;transition:all .25s}
+.theme-card:hover{border-color:var(--border-light);transform:translateY(-2px)}
+.theme-card.selected{border-color:var(--primary);background:var(--primary-soft);box-shadow:0 0 24px rgba(255,61,139,.15)}
+.theme-card .theme-icon{font-size:28px;margin-bottom:8px}
+.theme-card .theme-name{font-size:14px;font-weight:600;margin-bottom:2px}
+.theme-card .theme-count{font-size:11px;color:var(--txt-muted)}
+/* Step2 素材编排 */
+.material-pool{display:grid;grid-template-columns:3fr 2fr;gap:20px}
+.pool-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.pool-panel h4{font-size:13px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.pool-panel h4 .count{font-size:11px;color:var(--txt-muted);font-weight:400}
+.pool-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--radius-sm);margin-bottom:4px;border:1.5px solid transparent;cursor:pointer;transition:all .15s}
+.pool-item:hover{background:var(--card)}
+.pool-item.added{border-color:var(--primary);background:var(--primary-soft)}
+.pool-item .pool-thumb{width:48px;height:64px;border-radius:4px;background:var(--card);overflow:hidden;flex-shrink:0;position:relative}
+.pool-item .pool-thumb img{width:100%;height:100%;object-fit:cover}
+.pool-item .pool-info{flex:1;min-width:0}
+.pool-item .pool-info p{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pool-item .pool-info span{font-size:10px;color:var(--txt-muted)}
+.pool-item .pool-type{font-size:9px;padding:1px 6px;border-radius:4px;flex-shrink:0}
+.pool-item .add-icon{color:var(--primary);font-size:12px}
+.selected-pool .pool-item .sort-btns{display:flex;flex-direction:column;gap:2px;margin-right:6px}
+.selected-pool .pool-item .sort-btns button{width:18px;height:16px;border-radius:3px;background:var(--card);border:1px solid var(--border);font-size:8px;color:var(--txt-dim);display:flex;align-items:center;justify-content:center;transition:all .15s}
+.selected-pool .pool-item .sort-btns button:hover{border-color:var(--primary);color:var(--primary)}
+.selected-pool .pool-item .remove-btn{color:var(--txt-muted);font-size:12px;transition:color .15s}
+.selected-pool .pool-item .remove-btn:hover{color:var(--orange)}
+.empty-pool{border:2px dashed var(--border);border-radius:var(--radius);padding:40px;text-align:center;color:var(--txt-muted);font-size:12px}
+/* Step3 参数配置 */
+.config-sections{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.config-group{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;position:relative;overflow:hidden}
+.config-group::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border);transition:background .2s}
+.config-group:hover::before{background:var(--primary)}
+.config-group .config-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.config-group .config-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+.config-group .config-title i{font-size:11px;color:var(--primary)}
+.config-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.config-row label{font-size:12px;color:var(--txt-dim)}
+.config-row select,.config-row input[type=range]{max-width:160px}
+.style-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.style-card{padding:10px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);text-align:center;cursor:pointer;transition:all .2s}
+.style-card:hover{border-color:var(--border-light)}
+.style-card.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
+.style-card .style-label{font-size:12px;font-weight:600}
+.style-card .style-desc{font-size:9px;color:var(--txt-muted);margin-top:2px}
+.speed-btns{display:flex;gap:6px;margin-top:6px}
+.speed-btn{flex:1;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);text-align:center;font-size:11px;cursor:pointer;transition:all .2s}
+.speed-btn:hover{border-color:var(--border-light)}
+.speed-btn.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
+.speed-btn .speed-sub{font-size:9px;color:var(--txt-muted);margin-top:1px}
+.step-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:28px;padding-top:20px;border-top:1px solid var(--border)}
+/* Step4 确认提交 */
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.summary-card h5{font-size:11px;color:var(--txt-muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
+.summary-card .summary-item{font-size:12px;color:var(--txt-dim);margin-bottom:4px;display:flex;justify-content:space-between}
+.summary-card .summary-item span:last-child{color:var(--txt);font-weight:500}
+.material-preview-strip{display:flex;gap:8px;overflow-x:auto;padding:12px 0}
+.material-preview-strip .strip-item{width:80px;height:107px;border-radius:6px;overflow:hidden;flex-shrink:0;border:1px solid var(--border)}
+.material-preview-strip .strip-item img{width:100%;height:100%;object-fit:cover}
 
-  .btn-outline{border:1px solid #2a2535;color:#f0e8ec;transition:all .15s;background:transparent}
-  .btn-outline:hover{border-color:rgba(255,61,139,.4);color:#ff3d8b;background:rgba(255,61,139,.05)}
+/* ========== 任务管理 ========== */
+.task-tabs{display:flex;gap:4px;margin-bottom:20px}
+.task-tab{padding:7px 16px;border-radius:20px;font-size:12px;color:var(--txt-dim);cursor:pointer;transition:all .2s;position:relative}
+.task-tab:hover{color:var(--txt);background:rgba(255,255,255,.03)}
+.task-tab.active{color:var(--primary);background:var(--primary-soft)}
+.task-tab .tab-badge{font-size:10px;color:var(--txt-muted);margin-left:4px}
+.task-list{display:flex;flex-direction:column;gap:10px}
+.task-card-item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;display:flex;align-items:center;gap:16px;transition:all .25s}
+.task-card-item:hover{border-color:var(--border-light);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.task-card-item .tc-icon{width:40px;height:40px;border-radius:8px;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--txt-muted);font-size:16px;flex-shrink:0}
+.task-card-item .tc-info{flex:1;min-width:0}
+.task-card-item .tc-info .tc-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.task-card-item .tc-info .tc-meta{font-size:11px;color:var(--txt-muted)}
+.task-card-item .tc-progress{width:200px;flex-shrink:0}
+.task-card-item .tc-progress .prog-label{font-size:11px;color:var(--txt-dim);margin-bottom:4px;display:flex;justify-content:space-between}
+.task-card-item .tc-actions{display:flex;gap:8px;flex-shrink:0}
 
-  .fade-in{animation:fadeIn .3s ease}
-  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+/* ========== 成片预览模态框 ========== */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:100;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.preview-modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:90vw;max-width:1100px;height:75vh;overflow:hidden;display:flex;flex-direction:column;animation:fadeIn .3s ease}
+.preview-topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border)}
+.preview-topbar .left{display:flex;align-items:center;gap:10px;font-size:13px}
+.preview-topbar .left .task-theme{color:var(--primary);font-weight:600}
+.preview-topbar .right{display:flex;align-items:center;gap:10px}
+.preview-body{flex:1;display:flex;overflow:hidden}
+.preview-player{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px;position:relative;background:var(--bg)}
+.preview-video-area{position:relative;max-height:100%;display:flex;align-items:center;justify-content:center}
+.preview-video-frame{position:relative;background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.preview-video-frame .frame-cover{width:100%;display:block;object-fit:cover}
+.preview-video-frame .frame-overlay{position:absolute;inset:0;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center}
+.preview-video-frame .big-play{width:56px;height:56px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;cursor:pointer;transition:all .25s;box-shadow:0 0 24px var(--primary-glow)}
+.preview-video-frame .big-play:hover{transform:scale(1.1);box-shadow:0 0 36px var(--primary-glow)}
+/* ★ 新增：字幕叠加层 */
+.subtitle-overlay{position:absolute;left:0;right:0;text-align:center;pointer-events:none;padding:0 20px}
+.subtitle-overlay.pos-bottom{bottom:12%}
+.subtitle-overlay.pos-top{top:12%}
+.subtitle-overlay.pos-left{text-align:left}
+.subtitle-text{display:inline-block;padding:4px 12px;font-size:17px;font-weight:500;color:#fff;text-shadow:0 0 8px rgba(0,0,0,.8);-webkit-text-stroke:1px rgba(0,0,0,.3);transition:opacity .15s}
+.preview-controls{position:absolute;bottom:0;left:0;right:0;padding:10px 16px;background:linear-gradient(transparent,rgba(0,0,0,.8));display:flex;align-items:center;gap:12px;opacity:0;transition:opacity .2s}
+.preview-player:hover .preview-controls{opacity:1}
+.preview-controls .ctrl-play{color:#fff;font-size:14px;cursor:pointer;transition:color .15s}
+.preview-controls .ctrl-play:hover{color:var(--primary)}
+.preview-controls .ctrl-progress{flex:1;height:4px;background:rgba(255,255,255,.15);border-radius:2px;cursor:pointer;position:relative}
+.preview-controls .ctrl-progress .ctrl-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--primary-deep));border-radius:2px;position:relative}
+.preview-controls .ctrl-progress .ctrl-fill::after{content:'';position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--primary);box-shadow:0 0 8px var(--primary-glow);opacity:0;transition:opacity .15s}
+.preview-controls .ctrl-progress:hover .ctrl-fill::after{opacity:1}
+.preview-controls .ctrl-time{font-size:11px;color:rgba(255,255,255,.7);font-family:var(--font-mono);white-space:nowrap}
+.preview-controls .ctrl-nav{display:flex;gap:6px}
+.preview-controls .ctrl-nav button{color:rgba(255,255,255,.5);font-size:12px;transition:color .15s}
+.preview-controls .ctrl-nav button:hover{color:var(--primary)}
+.preview-sidebar{width:260px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.preview-sidebar .sidebar-title{font-size:12px;font-weight:600;padding:14px 16px;border-bottom:1px solid var(--border);color:var(--txt-dim)}
+.preview-list{flex:1;overflow-y:auto;padding:10px}
+.preview-list-item{padding:8px;border-radius:var(--radius-sm);margin-bottom:6px;cursor:pointer;transition:all .2s;border:1.5px solid transparent}
+.preview-list-item:hover{background:var(--card)}
+.preview-list-item.active{border-color:var(--primary);background:var(--primary-soft);box-shadow:0 0 16px rgba(255,61,139,.1)}
+.preview-list-item .pli-thumb{position:relative;width:100%;padding-top:140%;border-radius:6px;overflow:hidden;background:var(--card);margin-bottom:6px}
+.preview-list-item .pli-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.preview-list-item .pli-index{position:absolute;top:4px;left:4px;background:var(--primary);color:#fff;font-size:9px;font-weight:600;padding:1px 6px;border-radius:4px}
+.preview-list-item .pli-dur{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.7);color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-family:var(--font-mono)}
+.preview-list-item .pli-copy{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--txt-dim)}
+.preview-list-item .pli-size{font-size:10px;color:var(--txt-muted);margin-top:2px}
+/* ★ 新增：剪辑方案追溯面板 */
+.edit-plan-panel{border-top:1px solid var(--border);padding:12px 16px;max-height:200px;overflow-y:auto}
+.edit-plan-panel .epp-title{font-size:11px;font-weight:600;color:var(--txt-dim);margin-bottom:8px;display:flex;align-items:center;gap:4px}
+.edit-plan-panel .epp-title i{color:var(--primary);font-size:10px}
+.epp-segment{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;font-size:10px}
+.epp-segment .epp-time{color:var(--txt-muted);font-family:var(--font-mono);white-space:nowrap;min-width:70px;padding-top:1px}
+.epp-segment .epp-bar{flex:1;height:22px;background:var(--card);border-radius:4px;overflow:hidden;position:relative;display:flex;align-items:center;padding:0 8px}
+.epp-segment .epp-bar .epp-fill{position:absolute;inset:0;opacity:.15}
+.epp-segment .epp-bar.speedup .epp-fill{background:var(--orange)}
+.epp-segment .epp-bar.cut_highlight .epp-fill{background:var(--primary)}
+.epp-segment .epp-bar.cut_mid .epp-fill{background:var(--blue)}
+.epp-segment .epp-bar span{position:relative;z-index:1;color:var(--txt);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.epp-segment .epp-strategy{font-size:9px;padding:1px 5px;border-radius:3px;white-space:nowrap;flex-shrink:0}
+.epp-strategy.speedup{background:rgba(255,143,92,.15);color:var(--orange)}
+.epp-strategy.cut_highlight{background:var(--primary-soft);color:var(--primary)}
+.epp-strategy.cut_mid{background:rgba(108,140,255,.15);color:var(--blue)}
 
-  .toast-enter{animation:toastIn .35s cubic-bezier(.4,0,.2,1)}
-  .toast-exit{animation:toastOut .3s ease forwards}
-  @keyframes toastIn{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:translateX(0)}}
-  @keyframes toastOut{to{opacity:0;transform:translateX(60px)}}
-
-  .stat-card{position:relative;overflow:hidden}
-  .stat-card::after{content:'';position:absolute;top:-30%;right:-20%;width:100px;height:100px;border-radius:50%;opacity:.06}
-  .stat-card:nth-child(1)::after{background:#ff3d8b}
-  .stat-card:nth-child(2)::after{background:#6c8cff}
-  .stat-card:nth-child(3)::after{background:#ffb020}
-  .stat-card:nth-child(4)::after{background:#ff8f5c}
-
-  .pulse-dot{width:8px;height:8px;border-radius:50%;animation:pulse 2s infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-  .progress-bar-fill{transition:width .5s ease}
-
-  .modal-backdrop{background:rgba(0,0,0,.75);backdrop-filter:blur(6px)}
-
-  select,input[type="text"],input[type="number"]{background:#1a1824;border:1px solid #2a2535;color:#f0e8ec;border-radius:8px;padding:8px 12px;font-size:14px;outline:none;transition:border-color .15s}
-  select:focus,input[type="text"]:focus,input[type="number"]:focus{border-color:#ff3d8b}
-  input[type="range"]{-webkit-appearance:none;background:#2a2535;height:4px;border-radius:2px;outline:none}
-  input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#ff3d8b;cursor:pointer;box-shadow:0 0 8px rgba(255,61,139,.4)}
-
-  .switch{width:40px;height:22px;background:#2a2535;border-radius:11px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
-  .switch.on{background:#ff3d8b}
-  .switch::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s}
-  .switch.on::after{transform:translateX(18px)}
-
-  .bg-dots{background-image:radial-gradient(circle,#1a1824 1px,transparent 1px);background-size:24px 24px}
-
-  .video-player{position:relative;background:#000;border-radius:12px;overflow:hidden}
-  .video-player .vp-controls{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:24px 16px 12px;opacity:0;transition:opacity .25s}
-  .video-player:hover .vp-controls{opacity:1}
-  .vp-progress{width:100%;height:3px;background:rgba(255,255,255,.15);border-radius:2px;cursor:pointer;position:relative;margin-bottom:8px;transition:height .1s}
-  .vp-progress:hover{height:5px}
-  .vp-progress-fill{height:100%;background:linear-gradient(90deg,#ff3d8b,#ff7eb3);border-radius:2px;transition:width .1s linear;position:relative}
-  .vp-progress-fill::after{content:'';position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:12px;height:12px;border-radius:50%;background:#ff3d8b;opacity:0;transition:opacity .15s;box-shadow:0 0 10px rgba(255,61,139,.5)}
-  .vp-progress:hover .vp-progress-fill::after{opacity:1}
-  .vp-play-btn{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s;border:none;color:#fff}
-  .vp-play-btn:hover{background:rgba(255,61,139,.35)}
-  .vp-big-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:68px;height:68px;border-radius:50%;background:rgba(255,61,139,.9);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .25s;border:none;color:#fff;z-index:2}
-  .vp-big-play:hover{transform:translate(-50%,-50%) scale(1.1);box-shadow:0 0 40px rgba(255,61,139,.5)}
-  .vp-big-play.hidden{opacity:0;pointer-events:none;transform:translate(-50%,-50%) scale(.8)}
-
-  .output-thumb{transition:all .2s;cursor:pointer;position:relative}
-  .output-thumb:hover{transform:scale(1.02);border-color:rgba(255,61,139,.5)}
-  .output-thumb.active-thumb{border-color:#ff3d8b;box-shadow:0 0 16px rgba(255,61,139,.2);background:rgba(255,61,139,.05)}
-  .output-thumb .thumb-play{opacity:0;transition:opacity .2s}
-  .output-thumb:hover .thumb-play{opacity:1}
-
-  .subtitle-overlay{position:absolute;left:0;right:0;text-align:center;pointer-events:none;z-index:1}
-  .subtitle-overlay.bottom-center{bottom:52px}
-  .subtitle-overlay.bottom-left{bottom:52px;text-align:left;padding-left:16px}
-  .subtitle-overlay.top-center{top:32px}
-  .subtitle-text{display:inline-block;padding:4px 14px;font-size:15px;line-height:1.7;letter-spacing:.5px}
-  .subtitle-text.white{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.9),0 0 10px rgba(0,0,0,.6)}
-  .subtitle-text.yellow{color:#ffe135;text-shadow:0 1px 4px rgba(0,0,0,.9)}
-  .subtitle-text.cyan{color:#00f0ff;text-shadow:0 1px 4px rgba(0,0,0,.9)}
-  .subtitle-text.stroke{-webkit-text-stroke:.8px rgba(0,0,0,.7)}
-
-  .glow-line{height:1px;background:linear-gradient(90deg,transparent,rgba(255,61,139,.3),transparent)}
-
-  @keyframes floatBlob{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.05)}66%{transform:translate(-20px,15px) scale(.95)}}
-  .float-blob{animation:floatBlob 12s ease-in-out infinite;pointer-events:none}
+/* ========== 素材预览模态框 ========== */
+.material-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:100;display:none;align-items:center;justify-content:center}
+.material-modal.show{display:flex}
+.material-modal-content{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:480px;overflow:hidden;animation:fadeIn .3s ease}
+.mm-video{width:100%;aspect-ratio:16/9;background:var(--card);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.mm-video img{width:100%;height:100%;object-fit:cover}
+.mm-video .mm-play{width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;cursor:pointer;transition:all .2s}
+.mm-video .mm-play:hover{background:var(--primary);border-color:var(--primary)}
+/* ★ 新增：预览模态框中的高光可视化 */
+.mm-highlight-bar{height:6px;background:rgba(255,255,255,.06);position:relative}
+.mm-highlight-bar .seg{position:absolute;top:0;height:100%;background:var(--primary);border-radius:2px;opacity:.7;cursor:pointer;transition:opacity .15s}
+.mm-highlight-bar .seg:hover{opacity:1}
+.mm-body{padding:16px 20px}
+.mm-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+.mm-meta-item{text-align:center;padding:8px;background:var(--card);border-radius:var(--radius-sm)}
+.mm-meta-item .mm-meta-val{font-size:13px;font-weight:600;color:var(--txt)}
+.mm-meta-item .mm-meta-label{font-size:10px;color:var(--txt-muted);margin-top:2px}
+.mm-tags{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
+.mm-tags span{font-size:10px;padding:2px 8px;border-radius:8px;background:var(--card);color:var(--txt-dim);border:1px solid var(--border)}
+.mm-actions{display:flex;gap:8px;margin-top:12px}
+.close-btn{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--txt-muted);transition:all .15s;font-size:14px}
+.close-btn:hover{background:rgba(255,255,255,.08);color:var(--txt)}
 </style>
 </head>
-<body class="flex">
-
-<aside class="w-60 h-screen flex flex-col bg-surface border-r border-border flex-shrink-0 relative overflow-hidden">
-  <div class="float-blob absolute -top-20 -right-20 w-40 h-40 rounded-full bg-primary/5 blur-2xl"></div>
-  <div class="p-5 border-b border-border relative z-10">
-    <div class="flex items-center gap-2.5">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-dim flex items-center justify-center shadow-lg shadow-primary/20">
-        <i class="fas fa-play text-white text-xs"></i>
-      </div>
-      <span class="font-display font-bold text-lg tracking-tight text-txt">FlowCut</span>
+<body>
+<div class="app">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h1>FlowCut</h1>
+      <p>素材采集 × 智能混剪</p>
     </div>
-    <p class="text-txt-muted text-xs mt-1.5 ml-11.5">素材采集 × 智能混剪</p>
-  </div>
-  <nav class="flex-1 py-4 px-3 space-y-1 relative z-10" id="sidebar-nav">
-    <div class="sidebar-item active rounded-lg px-3 py-2.5 flex items-center gap-3 cursor-pointer text-sm" data-page="dashboard"><i class="fas fa-th-large w-4 text-center text-xs"></i><span>工作台</span></div>
-    <div class="sidebar-item rounded-lg px-3 py-2.5 flex items-center gap-3 cursor-pointer text-sm text-txt-dim" data-page="materials"><i class="fas fa-film w-4 text-center text-xs"></i><span>素材库</span></div>
-    <div class="sidebar-item rounded-lg px-3 py-2.5 flex items-center gap-3 cursor-pointer text-sm text-txt-dim" data-page="workflow"><i class="fas fa-wand-magic-sparkles w-4 text-center text-xs"></i><span>剪辑工作流</span></div>
-    <div class="sidebar-item rounded-lg px-3 py-2.5 flex items-center gap-3 cursor-pointer text-sm text-txt-dim" data-page="tasks"><i class="fas fa-tasks w-4 text-center text-xs"></i><span>任务管理</span><span class="ml-auto bg-primary/20 text-primary text-xs px-1.5 py-0.5 rounded-full" id="task-badge" style="display:none">0</span></div>
-    <div class="mt-6 mb-2 px-3 text-xs text-txt-muted font-medium uppercase tracking-wider">工具</div>
-    <div class="sidebar-item rounded-lg px-3 py-2.5 flex items-center gap-3 cursor-pointer text-sm text-txt-dim" data-page="collect"><i class="fas fa-download w-4 text-center text-xs"></i><span>素材采集</span></div>
-  </nav>
-  <div class="p-4 border-t border-border relative z-10">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-full bg-card flex items-center justify-center text-primary text-xs font-bold border border-primary/30">PM</div>
-      <div><div class="text-sm font-medium text-txt">产品经理</div><div class="text-xs text-txt-muted">管理员</div></div>
-    </div>
-  </div>
-</aside>
-
-<main class="flex-1 h-screen overflow-y-auto bg-dots relative" id="app">
-  <div class="float-blob absolute top-20 right-40 w-80 h-80 rounded-full bg-primary/3 blur-3xl"></div>
-  <div class="float-blob absolute bottom-20 left-20 w-60 h-60 rounded-full bg-primary/2 blur-3xl" style="animation-delay:-4s"></div>
-</main>
-
-<div id="modal-root" class="fixed inset-0 z-50 hidden"></div>
-<div id="toast-root" class="fixed top-5 right-5 z-[60] flex flex-col gap-2"></div>
-
-<script>
-const MATERIALS=[
-  {id:1,title:'奶茶摇制过程特写',keyword:'奶茶',tags:['奶茶','制作'],duration:8,resolution:'1080x1920',source:'抖音',size:12.5,time:'01-15 14:30',thumb:'https://picsum.photos/seed/mt1/400/560'},
-  {id:2,title:'珍珠奶茶冰块倒入',keyword:'奶茶',tags:['奶茶','特写'],duration:5,resolution:'1080x1920',source:'抖音',size:8.2,time:'01-15 14:28',thumb:'https://picsum.photos/seed/mt2/400/560'},
-  {id:3,title:'奶茶店店面招牌展示',keyword:'奶茶',tags:['奶茶','门店'],duration:12,resolution:'1080x1920',source:'快手',size:18.3,time:'01-15 13:50',thumb:'https://picsum.photos/seed/mt3/400/560'},
-  {id:4,title:'手捧奶茶走街景',keyword:'奶茶',tags:['奶茶','街拍'],duration:10,resolution:'1080x1920',source:'抖音',size:15.1,time:'01-15 13:45',thumb:'https://picsum.photos/seed/mt4/400/560'},
-  {id:5,title:'多杯奶茶摆桌拼排',keyword:'奶茶',tags:['奶茶','摆拍'],duration:6,resolution:'1080x1920',source:'B站',size:9.7,time:'01-15 12:20',thumb:'https://picsum.photos/seed/mt5/400/560'},
-  {id:6,title:'火锅红油沸腾翻滚',keyword:'火锅',tags:['火锅','特写'],duration:10,resolution:'1080x1920',source:'抖音',size:16.4,time:'01-15 11:30',thumb:'https://picsum.photos/seed/hb1/400/560'},
-  {id:7,title:'肥牛卷下锅瞬间',keyword:'火锅',tags:['火锅','食材'],duration:5,resolution:'1080x1920',source:'抖音',size:7.8,time:'01-15 11:25',thumb:'https://picsum.photos/seed/hb2/400/560'},
-  {id:8,title:'火锅蘸料调配过程',keyword:'火锅',tags:['火锅','蘸料'],duration:8,resolution:'1080x1920',source:'快手',size:11.2,time:'01-15 10:50',thumb:'https://picsum.photos/seed/hb3/400/560'},
-  {id:9,title:'朋友们围坐火锅桌',keyword:'火锅',tags:['火锅','社交'],duration:15,resolution:'1080x1920',source:'抖音',size:22.6,time:'01-15 10:30',thumb:'https://picsum.photos/seed/hb4/400/560'},
-  {id:10,title:'烧烤肉串翻面滋油',keyword:'烧烤',tags:['烧烤','特写'],duration:7,resolution:'1080x1920',source:'抖音',size:10.9,time:'01-14 22:10',thumb:'https://picsum.photos/seed/sk1/400/560'},
-  {id:11,title:'烧烤摊夜景全景',keyword:'烧烤',tags:['烧烤','夜景'],duration:12,resolution:'1080x1920',source:'快手',size:17.5,time:'01-14 22:05',thumb:'https://picsum.photos/seed/sk2/400/560'},
-  {id:12,title:'撒辣椒面慢动作',keyword:'烧烤',tags:['烧烤','特写'],duration:4,resolution:'1080x1920',source:'抖音',size:6.3,time:'01-14 21:50',thumb:'https://picsum.photos/seed/sk3/400/560'},
-  {id:13,title:'护肤品涂抹脸部过程',keyword:'护肤',tags:['护肤','教程'],duration:15,resolution:'1080x1920',source:'小红书',size:23.1,time:'01-14 18:30',thumb:'https://picsum.photos/seed/hf1/400/560'},
-  {id:14,title:'精华液滴落手背特写',keyword:'护肤',tags:['护肤','特写'],duration:6,resolution:'1080x1920',source:'小红书',size:8.8,time:'01-14 18:20',thumb:'https://picsum.photos/seed/hf2/400/560'},
-  {id:15,title:'护肤产品摆拍合集',keyword:'护肤',tags:['护肤','摆拍'],duration:8,resolution:'1080x1920',source:'抖音',size:12.0,time:'01-14 17:45',thumb:'https://picsum.photos/seed/hf3/400/560'},
-  {id:16,title:'健身房器械训练',keyword:'健身',tags:['健身','训练'],duration:10,resolution:'1080x1920',source:'抖音',size:15.3,time:'01-14 16:00',thumb:'https://picsum.photos/seed/js1/400/560'},
-  {id:17,title:'跑步机跑步侧面',keyword:'健身',tags:['健身','有氧'],duration:8,resolution:'1080x1920',source:'B站',size:12.1,time:'01-14 15:50',thumb:'https://picsum.photos/seed/js2/400/560'},
-  {id:18,title:'海边日落无人机航拍',keyword:'旅游',tags:['旅游','风景'],duration:12,resolution:'1080x1920',source:'抖音',size:19.4,time:'01-14 14:00',thumb:'https://picsum.photos/seed/ly1/400/560'},
-  {id:19,title:'古镇街道漫步',keyword:'旅游',tags:['旅游','人文'],duration:15,resolution:'1080x1920',source:'快手',size:22.8,time:'01-14 13:40',thumb:'https://picsum.photos/seed/ly2/400/560'},
-  {id:20,title:'街头潮流穿搭展示',keyword:'穿搭',tags:['穿搭','街拍'],duration:10,resolution:'1080x1920',source:'抖音',size:14.7,time:'01-13 20:00',thumb:'https://picsum.photos/seed/dp1/400/560'},
-  {id:21,title:'换装转场合集',keyword:'穿搭',tags:['穿搭','转场'],duration:8,resolution:'1080x1920',source:'抖音',size:11.5,time:'01-13 19:50',thumb:'https://picsum.photos/seed/dp2/400/560'},
-  {id:22,title:'数码产品开箱展示',keyword:'数码',tags:['数码','开箱'],duration:18,resolution:'1080x1920',source:'B站',size:27.2,time:'01-13 16:00',thumb:'https://picsum.photos/seed/sm1/400/560'},
-  {id:23,title:'手机拍摄样张对比',keyword:'数码',tags:['数码','测评'],duration:12,resolution:'1080x1920',source:'B站',size:17.8,time:'01-13 15:40',thumb:'https://picsum.photos/seed/sm2/400/560'},
-  {id:24,title:'奶茶吸管插入特写',keyword:'奶茶',tags:['奶茶','特写'],duration:3,resolution:'1080x1920',source:'抖音',size:5.1,time:'01-13 14:20',thumb:'https://picsum.photos/seed/mt6/400/560'},
-];
-
-const THEMES=[
-  {name:'奶茶',icon:'fa-mug-hot',color:'#ff9f43',keywords:['奶茶','珍珠','饮品']},
-  {name:'火锅',icon:'fa-fire',color:'#ff5c3a',keywords:['火锅','涮肉','红油']},
-  {name:'烧烤',icon:'fa-drumstick-bite',color:'#ffb020',keywords:['烧烤','肉串','烤肉']},
-  {name:'护肤',icon:'fa-pump-soap',color:'#e056a0',keywords:['护肤','美妆','面膜']},
-  {name:'健身',icon:'fa-dumbbell',color:'#ff3d8b',keywords:['健身','运动','训练']},
-  {name:'旅游',icon:'fa-plane',color:'#6c8cff',keywords:['旅游','风景','旅行']},
-  {name:'穿搭',icon:'fa-shirt',color:'#a855f7',keywords:['穿搭','时尚','潮流']},
-  {name:'数码',icon:'fa-microchip',color:'#908090',keywords:['数码','科技','开箱']},
-];
-
-const AD_COPY={
-  '奶茶':['这杯奶茶绝了','好喝到停不下来','奶茶自由安排上','今天你喝奶茶了吗','一口爱上这杯奶茶'],
-  '火锅':['火锅就是治愈','冬天必备火锅','这顿火锅太爽了','约上朋友吃火锅','没有火锅不叫聚餐'],
-  '烧烤':['深夜烧烤局','人间烟火气','烧烤配啤酒绝了','这串烤得太香了','撸串才是正经事'],
-  '护肤':['皮肤变好了','这个护肤品绝绝子','护肤小秘籍','坚持护肤真的有用','让你逆袭的护肤好物'],
-  '健身':['坚持就是胜利','今天也是练的一天','自律即自由','身材管理进行中','健身房打卡'],
-  '旅游':['说走就走的旅行','这个地方太美了','旅游治愈一切','打卡绝美风景','这一刻值了'],
-  '穿搭':['这样穿太好看','秋冬穿搭灵感','显瘦穿搭秘籍','出门回头率爆表','轻松拿捏时尚感'],
-  '数码':['这个数码产品真香','开箱惊喜满满','科技改变生活','性价比天花板','数码爱好者的福音'],
-};
-
-const SOURCE_MAP={'抖音':'fa-brands fa-tiktok','快手':'fa-solid fa-video','B站':'fa-solid fa-play','小红书':'fa-solid fa-book-open'};
-const SOURCE_COLOR={'抖音':'#ff0050','快手':'#ff8c21','B站':'#00a1d6','小红书':'#ff2442'};
-
-const state={
-  currentPage:'dashboard',
-  matSearch:'',matSourceFilter:[],matTagFilter:'',matSelected:new Set(),
-  wfStep:1,wfTheme:null,wfSelectedMats:[],
-  wfConfig:{
-    voice:{enabled:true,style:'活力女声',speed:'1.0',volume:80},
-    subtitle:{enabled:true,position:'底部居中',font:'思源黑体',size:'中',color:'白色',stroke:true},
-    music:{enabled:true,style:'轻快',volume:30},
-    transition:{type:'溶解',duration:'0.5s'},
-    output:{count:5,duration:'15s',ratio:'9:16',resolution:'1080p'}
-  },
-  tasks:[],taskFilter:'all',
-  collectKeywords:'',collectPlatforms:['抖音'],collectCount:10,collecting:false,collectProgress:0,
-  playerState:null,
-};
-
-const $=s=>document.querySelector(s);
-const $$=s=>document.querySelectorAll(s);
-
-function showToast(msg,type='success'){
-  const r=$('#toast-root');
-  const c={success:'border-primary/50 bg-primary/10 text-primary',error:'border-accent/50 bg-accent/10 text-accent',info:'border-info/50 bg-info/10 text-info'};
-  const ic={success:'fa-check-circle',error:'fa-exclamation-circle',info:'fa-info-circle'};
-  const el=document.createElement('div');
-  el.className=`toast-enter flex items-center gap-2.5 px-4 py-3 rounded-xl border backdrop-blur-md text-sm ${c[type]}`;
-  el.innerHTML=`<i class="fas ${ic[type]}"></i><span>${msg}</span>`;
-  r.appendChild(el);
-  setTimeout(()=>{el.classList.remove('toast-enter');el.classList.add('toast-exit');setTimeout(()=>el.remove(),300)},2800);
-}
-
-function showModal(html){
-  const r=$('#modal-root');
-  r.innerHTML=`<div class="modal-backdrop fixed inset-0 flex items-center justify-center z-50" onclick="if(event.target===this)closeModal()"><div class="fade-in bg-surface border border-border rounded-2xl shadow-2xl max-w-5xl w-full mx-4 max-h-[92vh] overflow-hidden">${html}</div></div>`;
-  r.classList.remove('hidden');
-}
-function closeModal(){
-  if(state.playerState&&state.playerState.interval){clearInterval(state.playerState.interval)}
-  state.playerState=null;
-  $('#modal-root').classList.add('hidden');
-  $('#modal-root').innerHTML='';
-}
-
-function fmtDur(s){return`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`}
-
-// ===== 页面渲染 =====
-function renderDashboard(){
-  const tM=MATERIALS.length,tT=MATERIALS.filter(m=>m.time.startsWith('01-15')).length;
-  const dT=state.tasks.filter(t=>t.status==='done');
-  const tV=dT.reduce((a,t)=>a+t.config.count,0);
-  const tS=MATERIALS.reduce((a,m)=>a+m.size,0).toFixed(1);
-  const rT=state.tasks.filter(t=>t.status==='processing').length;
-  return`<div class="fade-in p-6 space-y-6 relative z-10">
-    <div><h1 class="text-2xl font-bold font-display text-txt">工作台</h1><p class="text-txt-dim text-sm mt-1">素材采集与自动化剪辑全流程概览</p></div>
-    <div class="grid grid-cols-4 gap-4">
-      <div class="stat-card bg-card border border-border rounded-xl p-5"><div class="flex items-center justify-between mb-3"><span class="text-txt-dim text-sm">素材总量</span><div class="w-9 h-9 rounded-lg bg-primary-soft flex items-center justify-center"><i class="fas fa-film text-primary text-sm"></i></div></div><div class="text-3xl font-bold font-display text-txt">${tM}</div><div class="text-xs text-txt-muted mt-1">覆盖 ${[...new Set(MATERIALS.map(m=>m.keyword))].length} 个主题</div></div>
-      <div class="stat-card bg-card border border-border rounded-xl p-5"><div class="flex items-center justify-between mb-3"><span class="text-txt-dim text-sm">今日新增</span><div class="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center"><i class="fas fa-plus text-info text-sm"></i></div></div><div class="text-3xl font-bold font-display text-txt">${tT}</div><div class="text-xs text-txt-muted mt-1">较昨日 <span class="text-primary">+12%</span></div></div>
-      <div class="stat-card bg-card border border-border rounded-xl p-5"><div class="flex items-center justify-between mb-3"><span class="text-txt-dim text-sm">产出视频</span><div class="w-9 h-9 rounded-lg bg-warn/10 flex items-center justify-center"><i class="fas fa-video text-warn text-sm"></i></div></div><div class="text-3xl font-bold font-display text-txt">${tV}</div><div class="text-xs text-txt-muted mt-1">${dT.length} 个任务已完成</div></div>
-      <div class="stat-card bg-card border border-border rounded-xl p-5"><div class="flex items-center justify-between mb-3"><span class="text-txt-dim text-sm">存储用量</span><div class="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center"><i class="fas fa-database text-accent text-sm"></i></div></div><div class="text-3xl font-bold font-display text-txt">${tS}<span class="text-lg text-txt-dim">MB</span></div><div class="text-xs text-txt-muted mt-1">总计 2TB 可用</div></div>
-    </div>
-    <div class="grid grid-cols-3 gap-4">
-      <div class="col-span-2 bg-card border border-border rounded-xl p-5">
-        <div class="flex items-center justify-between mb-4"><h2 class="font-semibold text-txt">最近任务</h2><button class="text-xs text-primary hover:underline" onclick="navigateTo('tasks')">查看全部 <i class="fas fa-arrow-right ml-1"></i></button></div>
-        ${state.tasks.length===0?'<div class="text-center py-12 text-txt-muted"><i class="fas fa-inbox text-3xl mb-3 block opacity-40"></i><p class="text-sm">暂无任务记录</p><button class="btn-primary px-4 py-2 rounded-lg text-sm mt-4" onclick="navigateTo(\'workflow\')">创建第一个任务</button></div>':state.tasks.slice(0,5).map((t,i,arr)=>{const sm={queue:{text:'排队中',color:'text-txt-dim',bg:'bg-txt-muted/20'},processing:{text:'处理中',color:'text-info',bg:'bg-info/15'},done:{text:'已完成',color:'text-primary',bg:'bg-primary-soft'},failed:{text:'失败',color:'text-accent',bg:'bg-accent/10'}};const s=sm[t.status];return`<div class="flex items-center gap-4 py-3 ${i<arr.length-1?'border-b border-border':''}"><div class="w-9 h-9 rounded-lg bg-surface flex items-center justify-center text-txt-muted"><i class="fas fa-video text-xs"></i></div><div class="flex-1 min-w-0"><div class="text-sm text-txt truncate">${t.name}</div><div class="text-xs text-txt-muted mt-0.5">${t.config.count}条 × ${t.config.duration} · ${t.time}</div></div><span class="text-xs px-2 py-1 rounded-full ${s.bg} ${s.color} flex items-center gap-1.5">${t.status==='processing'||t.status==='queue'?'<span class="pulse-dot '+(t.status==='processing'?'bg-info':'bg-txt-muted')+'"></span>':''}${s.text}</span></div>`}).join('')}
-      </div>
-      <div class="bg-card border border-border rounded-xl p-5">
-        <h2 class="font-semibold text-txt mb-4">热门主题</h2>
-        <div class="flex flex-wrap gap-2">${THEMES.map(t=>{const c=MATERIALS.filter(m=>m.keyword===t.name).length;return`<div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-border cursor-pointer hover:border-primary/30 transition-colors" onclick="navigateTo('materials');setTimeout(()=>{state.matTagFilter='${t.name}';renderPage()},100)"><i class="fas ${t.icon} text-xs" style="color:${t.color}"></i><span class="text-sm text-txt">${t.name}</span><span class="text-xs text-txt-muted">${c}</span></div>`}).join('')}</div>
-        <div class="mt-5 pt-4 border-t border-border"><h3 class="text-sm font-medium text-txt-dim mb-3">快速操作</h3><div class="space-y-2"><button class="w-full btn-outline rounded-lg px-3 py-2.5 text-sm flex items-center gap-2" onclick="navigateTo('collect')"><i class="fas fa-download text-xs"></i>新建采集任务</button><button class="w-full btn-primary rounded-lg px-3 py-2.5 text-sm flex items-center gap-2" onclick="navigateTo('workflow')"><i class="fas fa-wand-magic-sparkles text-xs"></i>开始自动剪辑</button></div></div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-page="dashboard"><i class="fas fa-th-large"></i>工作台</div>
+      <div class="nav-item" data-page="materials"><i class="fas fa-photo-video"></i>素材库</div>
+      <div class="nav-item" data-page="workflow"><i class="fas fa-magic"></i>剪辑工作流</div>
+      <div class="nav-item" data-page="tasks"><i class="fas fa-tasks"></i>任务管理<span class="nav-badge">0</span></div>
+      <div class="nav-group-label">工具</div>
+      <div class="nav-item nav-sub" data-page="collect"><i class="fas fa-download"></i>素材采集</div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="sidebar-avatar">PM</div>
+      <div class="sidebar-userinfo">
+        <p>产品经理</p>
+        <p>管理员</p>
       </div>
     </div>
-  </div>`;
-}
+  </aside>
 
-function renderMaterials(){
-  const allTags=[...new Set(MATERIALS.flatMap(m=>m.tags))];
-  let f=[...MATERIALS];
-  if(state.matSearch){const q=state.matSearch.toLowerCase();f=f.filter(m=>m.title.toLowerCase().includes(q)||m.keyword.toLowerCase().includes(q)||m.tags.some(t=>t.includes(q)))}
-  if(state.matSourceFilter.length>0)f=f.filter(m=>state.matSourceFilter.includes(m.source));
-  if(state.matTagFilter)f=f.filter(m=>m.keyword===state.matTagFilter||m.tags.includes(state.matTagFilter));
-  const src=['抖音','快手','B站','小红书'];
-  return`<div class="fade-in p-6 space-y-5 relative z-10">
-    <div class="flex items-center justify-between"><div><h1 class="text-2xl font-bold font-display text-txt">素材库</h1><p class="text-txt-dim text-sm mt-1">共 ${f.length} 条素材${state.matSearch?'，搜索"'+state.matSearch+'"':''}</p></div><div class="flex items-center gap-2">${state.matSelected.size>0?`<button class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2" onclick="addSelectedToWorkflow()"><i class="fas fa-plus text-xs"></i>加入工作流 (${state.matSelected.size})</button><button class="btn-outline px-3 py-2 rounded-lg text-sm" onclick="state.matSelected.clear();renderPage()">取消选择</button>`:''}</div></div>
-    <div class="bg-card border border-border rounded-xl p-4"><div class="flex items-center gap-3"><div class="flex-1 relative"><i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted text-sm"></i><input type="text" placeholder="搜索素材标题、关键词、标签..." value="${state.matSearch}" oninput="state.matSearch=this.value;renderPage()" class="w-full pl-9 pr-4 py-2.5 rounded-lg text-sm" /></div><div class="flex items-center gap-1.5">${src.map(s=>`<button class="tag-btn px-3 py-2 rounded-lg border border-border text-xs ${state.matSourceFilter.includes(s)?'active':'text-txt-dim'}" onclick="toggleSourceFilter('${s}')"><i class="${SOURCE_MAP[s]} mr-1" style="color:${SOURCE_COLOR[s]}"></i>${s}</button>`).join('')}</div></div>
-    <div class="flex items-center gap-2 mt-3 flex-wrap"><button class="tag-btn px-2.5 py-1 rounded-md border border-border text-xs ${!state.matTagFilter?'active':'text-txt-dim'}" onclick="state.matTagFilter='';renderPage()">全部</button>${allTags.map(t=>`<button class="tag-btn px-2.5 py-1 rounded-md border border-border text-xs ${state.matTagFilter===t?'active':'text-txt-dim'}" onclick="state.matTagFilter='${t}';renderPage()">${t}</button>`).join('')}</div></div>
-    <div class="grid grid-cols-4 gap-4">${f.map(m=>`<div class="material-card bg-card border border-border rounded-xl overflow-hidden cursor-pointer"><div class="relative aspect-[9/12] bg-bg"><img src="${m.thumb}" alt="${m.title}" class="w-full h-full object-cover" loading="lazy" /><div class="absolute top-2 right-2 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">${fmtDur(m.duration)}</div><div class="absolute top-2 left-2 flex items-center gap-1 bg-black/70 text-xs px-1.5 py-0.5 rounded" style="color:${SOURCE_COLOR[m.source]}"><i class="${SOURCE_MAP[m.source]} text-[10px]"></i>${m.source}</div><div class="play-overlay absolute inset-0 bg-black/40 flex items-center justify-center" onclick="previewMaterial(${m.id})"><div class="w-12 h-12 rounded-full bg-primary/30 backdrop-blur-sm flex items-center justify-center"><i class="fas fa-play text-white text-lg ml-0.5"></i></div></div><div class="absolute bottom-2 left-2"><button class="w-6 h-6 rounded-md ${state.matSelected.has(m.id)?'bg-primary text-white':'bg-black/50 text-white/80'} flex items-center justify-center text-[10px] transition-colors" onclick="event.stopPropagation();toggleMatSelect(${m.id})"><i class="fas ${state.matSelected.has(m.id)?'fa-check':'fa-plus'}"></i></button></div></div><div class="p-3"><div class="text-sm text-txt truncate mb-1.5">${m.title}</div><div class="flex items-center justify-between text-xs text-txt-muted"><span>${m.resolution}</span><span>${m.size}MB</span><span>${m.time}</span></div><div class="flex gap-1 mt-2">${m.tags.map(t=>`<span class="text-[10px] px-1.5 py-0.5 rounded bg-surface text-txt-dim">${t}</span>`).join('')}</div></div></div>`).join('')}</div>
-    ${f.length===0?'<div class="text-center py-16 text-txt-muted"><i class="fas fa-search text-3xl mb-3 opacity-40 block"></i><p class="text-sm">没有找到匹配的素材</p></div>':''}
-  </div>`;
-}
+  <!-- 主内容区 -->
+  <main class="main">
 
-function renderWorkflow(){
-  const steps=['选择主题','筛选素材','配置参数','确认提交'];
-  return`<div class="fade-in p-6 space-y-6 relative z-10">
-    <div><h1 class="text-2xl font-bold font-display text-txt">剪辑工作流</h1><p class="text-txt-dim text-sm mt-1">四步完成自动化广告视频批量产出</p></div>
-    <div class="flex items-center justify-center gap-0">${steps.map((s,i)=>{const n=i+1,ia=n===state.wfStep,id=n<state.wfStep;return`${i>0?`<div class="step-line w-16 h-0.5 ${id?'active':'bg-border'}"></div>`:''}<div class="flex flex-col items-center gap-2"><div class="step-circle w-10 h-10 rounded-full border-2 flex items-center justify-center text-sm font-bold ${ia?'active border-primary':id?'done border-primary':'border-border text-txt-muted'}">${id?'<i class="fas fa-check text-xs"></i>':n}</div><span class="text-xs ${ia?'text-primary font-medium':'text-txt-dim'}">${s}</span></div>`}).join('')}</div>
-    <div class="bg-card border border-border rounded-xl p-6">${state.wfStep===1?renderWFStep1():state.wfStep===2?renderWFStep2():state.wfStep===3?renderWFStep3():renderWFStep4()}</div>
-  </div>`;
-}
-
-function renderWFStep1(){return`<div class="space-y-4"><div class="flex items-center justify-between"><h2 class="font-semibold text-txt">选择广告主题</h2><div class="flex items-center gap-2"><input type="text" id="custom-theme-input" placeholder="自定义主题名称" class="w-40 text-sm" /><button class="btn-outline px-3 py-2 rounded-lg text-sm" onclick="addCustomTheme()">添加</button></div></div><div class="grid grid-cols-4 gap-3">${THEMES.map(t=>{const c=MATERIALS.filter(m=>m.keyword===t.name).length;return`<div class="theme-card border border-border rounded-xl p-4 ${state.wfTheme===t.name?'selected':''}" onclick="selectTheme('${t.name}')"><div class="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style="background:${t.color}18"><i class="fas ${t.icon}" style="color:${t.color}"></i></div><div class="font-medium text-txt text-sm">${t.name}</div><div class="text-xs text-txt-muted mt-1">${c} 条素材</div><div class="flex gap-1 mt-2">${t.keywords.map(k=>`<span class="text-[10px] px-1.5 py-0.5 rounded bg-surface text-txt-dim">${k}</span>`).join('')}</div></div>`}).join('')}</div><div class="flex justify-end pt-2"><button class="btn-primary px-6 py-2.5 rounded-lg text-sm" ${!state.wfTheme?'disabled':''} onclick="goWFStep(2)">下一步 <i class="fas fa-arrow-right ml-1"></i></button></div></div>`}
-
-function renderWFStep2(){
-  const tm=MATERIALS.filter(m=>m.keyword===state.wfTheme||m.tags.includes(state.wfTheme));
-  const si=state.wfSelectedMats.map(m=>m.id);
-  return`<div class="space-y-4"><div class="flex items-center justify-between"><h2 class="font-semibold text-txt">筛选与编排素材 <span class="text-txt-dim font-normal text-sm ml-2">主题：${state.wfTheme}</span></h2><span class="text-xs text-txt-muted">已选 ${state.wfSelectedMats.length} / 至少 3 条</span></div><div class="grid grid-cols-5 gap-4"><div class="col-span-3 space-y-2 max-h-96 overflow-y-auto pr-2"><div class="text-xs text-txt-muted mb-2">可选素材（点击添加）</div>${tm.length===0?'<div class="text-center py-8 text-txt-muted text-sm">该主题暂无匹配素材</div>':tm.map(m=>`<div class="flex items-center gap-3 p-2.5 rounded-lg bg-surface border ${si.includes(m.id)?'border-primary/40':'border-transparent'} hover:border-border transition-colors cursor-pointer" onclick="toggleWFMat(${m.id})"><img src="${m.thumb}" class="w-16 h-20 object-cover rounded-lg flex-shrink-0" /><div class="flex-1 min-w-0"><div class="text-sm text-txt truncate">${m.title}</div><div class="text-xs text-txt-muted mt-1">${fmtDur(m.duration)} · ${m.resolution} · ${m.size}MB</div><div class="flex gap-1 mt-1">${m.tags.map(t=>`<span class="text-[10px] px-1 py-0.5 rounded bg-card text-txt-dim">${t}</span>`).join('')}</div></div><div class="w-6 h-6 rounded-md ${si.includes(m.id)?'bg-primary text-white':'bg-card text-txt-muted'} flex items-center justify-center text-xs flex-shrink-0"><i class="fas ${si.includes(m.id)?'fa-check':'fa-plus'}"></i></div></div>`).join('')}</div><div class="col-span-2 space-y-2 max-h-96 overflow-y-auto pr-2"><div class="text-xs text-txt-muted mb-2">已选素材（上下排序）</div>${state.wfSelectedMats.length===0?'<div class="text-center py-8 text-txt-muted text-sm border border-dashed border-border rounded-xl">从左侧选择素材</div>':state.wfSelectedMats.map((m,i)=>`<div class="flex items-center gap-2 p-2.5 rounded-lg bg-surface border border-border"><div class="flex flex-col gap-0.5"><button class="w-5 h-4 rounded text-txt-muted hover:text-txt text-[9px] flex items-center justify-center" onclick="moveWFMat(${i},-1)"><i class="fas fa-chevron-up"></i></button><button class="w-5 h-4 rounded text-txt-muted hover:text-txt text-[9px] flex items-center justify-center" onclick="moveWFMat(${i},1)"><i class="fas fa-chevron-down"></i></button></div><img src="${m.thumb}" class="w-10 h-14 object-cover rounded flex-shrink-0" /><div class="flex-1 min-w-0"><div class="text-xs text-txt truncate">${m.title}</div><div class="text-[10px] text-txt-muted">${fmtDur(m.duration)}</div></div><button class="text-txt-muted hover:text-accent text-xs" onclick="removeWFMat(${i})"><i class="fas fa-times"></i></button></div>`).join('')}</div></div><div class="flex justify-between pt-2"><button class="btn-outline px-5 py-2.5 rounded-lg text-sm" onclick="goWFStep(1)"><i class="fas fa-arrow-left mr-1"></i>上一步</button><button class="btn-primary px-6 py-2.5 rounded-lg text-sm" ${state.wfSelectedMats.length<3?'disabled':''} onclick="goWFStep(3)">下一步 <i class="fas fa-arrow-right ml-1"></i></button></div></div>`;
-}
-
-function renderWFStep3(){
-  const c=state.wfConfig;
-  return`<div class="space-y-5"><h2 class="font-semibold text-txt">参数配置</h2><div class="grid grid-cols-2 gap-6">
-    <div class="config-group space-y-3"><div class="flex items-center justify-between"><h3 class="text-sm font-medium text-txt flex items-center gap-2"><i class="fas fa-microphone text-info text-xs"></i>配音设置</h3><div class="switch ${c.voice.enabled?'on':''}" onclick="state.wfConfig.voice.enabled=!state.wfConfig.voice.enabled;renderPage()"></div></div>${c.voice.enabled?`<div class="space-y-2"><label class="text-xs text-txt-dim">配音风格</label><select class="w-full text-sm" onchange="state.wfConfig.voice.style=this.value">${['活力女声','沉稳男声','可爱女声','磁性男声'].map(s=>`<option ${c.voice.style===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-2"><label class="text-xs text-txt-dim">语速</label><select class="w-full text-sm" onchange="state.wfConfig.voice.speed=this.value">${['0.8x','1.0x','1.2x','1.5x'].map(s=>`<option ${c.voice.speed===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-2"><div class="flex items-center justify-between"><label class="text-xs text-txt-dim">音量</label><span class="text-xs text-primary">${c.voice.volume}</span></div><input type="range" min="0" max="100" value="${c.voice.volume}" class="w-full" oninput="state.wfConfig.voice.volume=+this.value;renderPage()" /></div>`:''}</div>
-    <div class="config-group space-y-3"><div class="flex items-center justify-between"><h3 class="text-sm font-medium text-txt flex items-center gap-2"><i class="fas fa-closed-captioning text-warn text-xs"></i>字幕设置</h3><div class="switch ${c.subtitle.enabled?'on':''}" onclick="state.wfConfig.subtitle.enabled=!state.wfConfig.subtitle.enabled;renderPage()"></div></div>${c.subtitle.enabled?`<div class="grid grid-cols-2 gap-2"><div class="space-y-1"><label class="text-xs text-txt-dim">位置</label><select class="w-full text-sm" onchange="state.wfConfig.subtitle.position=this.value">${['底部居中','底部左对齐','顶部居中'].map(s=>`<option ${c.subtitle.position===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-1"><label class="text-xs text-txt-dim">字体</label><select class="w-full text-sm" onchange="state.wfConfig.subtitle.font=this.value">${['思源黑体','思源宋体','站酷快乐体'].map(s=>`<option ${c.subtitle.font===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-1"><label class="text-xs text-txt-dim">字号</label><select class="w-full text-sm" onchange="state.wfConfig.subtitle.size=this.value">${['小','中','大'].map(s=>`<option ${c.subtitle.size===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-1"><label class="text-xs text-txt-dim">颜色</label><select class="w-full text-sm" onchange="state.wfConfig.subtitle.color=this.value">${['白色','黄色','青色'].map(s=>`<option ${c.subtitle.color===s?'selected':''}>${s}</option>`).join('')}</select></div></div><div class="flex items-center gap-2"><div class="switch ${c.subtitle.stroke?'on':''}" onclick="state.wfConfig.subtitle.stroke=!state.wfConfig.subtitle.stroke;renderPage()"></div><span class="text-xs text-txt-dim">描边</span></div>`:''}</div>
-    <div class="config-group space-y-3"><div class="flex items-center justify-between"><h3 class="text-sm font-medium text-txt flex items-center gap-2"><i class="fas fa-music text-primary text-xs"></i>配乐设置</h3><div class="switch ${c.music.enabled?'on':''}" onclick="state.wfConfig.music.enabled=!state.wfConfig.music.enabled;renderPage()"></div></div>${c.music.enabled?`<div class="space-y-2"><label class="text-xs text-txt-dim">音乐风格</label><select class="w-full text-sm" onchange="state.wfConfig.music.style=this.value">${['轻快','抒情','动感','古风','电子'].map(s=>`<option ${c.music.style===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-2"><div class="flex items-center justify-between"><label class="text-xs text-txt-dim">音量</label><span class="text-xs text-primary">${c.music.volume}</span></div><input type="range" min="0" max="100" value="${c.music.volume}" class="w-full" oninput="state.wfConfig.music.volume=+this.value;renderPage()" /></div>`:''}</div>
-    <div class="config-group space-y-3"><h3 class="text-sm font-medium text-txt flex items-center gap-2"><i class="fas fa-shuffle text-accent text-xs"></i>转场与输出</h3><div class="grid grid-cols-2 gap-2"><div class="space-y-1"><label class="text-xs text-txt-dim">转场效果</label><select class="w-full text-sm" onchange="state.wfConfig.transition.type=this.value">${['溶解','滑动','缩放','模糊','无'].map(s=>`<option ${c.transition.type===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-1"><label class="text-xs text-txt-dim">转场时长</label><select class="w-full text-sm" onchange="state.wfConfig.transition.duration=this.value">${['0.3s','0.5s','0.8s','1.0s'].map(s=>`<option ${c.transition.duration===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-1"><label class="text-xs text-txt-dim">输出数量</label><select class="w-full text-sm" onchange="state.wfConfig.output.count=+this.value">${[3,5,10,15,20].map(n=>`<option ${c.output.count===n?'selected':''}>${n} 条</option>`).join('')}</select></div><div class="space-y-1"><label class="text-xs text-txt-dim">单条时长</label><select class="w-full text-sm" onchange="state.wfConfig.output.duration=this.value">${['10s','15s','20s','30s'].map(s=>`<option ${c.output.duration===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-1"><label class="text-xs text-txt-dim">画面比例</label><select class="w-full text-sm" onchange="state.wfConfig.output.ratio=this.value">${['9:16','16:9','1:1'].map(s=>`<option ${c.output.ratio===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="space-y-1"><label class="text-xs text-txt-dim">分辨率</label><select class="w-full text-sm" onchange="state.wfConfig.output.resolution=this.value">${['720p','1080p'].map(s=>`<option ${c.output.resolution===s?'selected':''}>${s}</option>`).join('')}</select></div></div></div>
-  </div><div class="flex justify-between pt-2"><button class="btn-outline px-5 py-2.5 rounded-lg text-sm" onclick="goWFStep(2)"><i class="fas fa-arrow-left mr-1"></i>上一步</button><button class="btn-primary px-6 py-2.5 rounded-lg text-sm" onclick="goWFStep(4)">下一步 <i class="fas fa-arrow-right ml-1"></i></button></div></div>`;
-}
-
-function renderWFStep4(){
-  const c=state.wfConfig;const th=THEMES.find(t=>t.name===state.wfTheme);
-  return`<div class="space-y-5"><h2 class="font-semibold text-txt">确认提交</h2>
-    <div class="grid grid-cols-3 gap-4">
-      <div class="bg-surface rounded-xl p-4 space-y-3"><h3 class="text-xs text-txt-muted font-medium uppercase tracking-wider">主题与素材</h3><div class="flex items-center gap-2">${th?`<i class="fas ${th.icon} text-lg" style="color:${th.color}"></i>`:''}<span class="text-lg font-semibold text-txt">${state.wfTheme}</span></div><div class="text-sm text-txt-dim">已选 <span class="text-primary font-bold">${state.wfSelectedMats.length}</span> 条素材</div><div class="text-xs text-txt-muted">总时长约 ${state.wfSelectedMats.reduce((a,m)=>a+m.duration,0)} 秒</div></div>
-      <div class="bg-surface rounded-xl p-4 space-y-2"><h3 class="text-xs text-txt-muted font-medium uppercase tracking-wider">配音 / 字幕 / 配乐</h3><div class="text-sm space-y-1.5"><div class="flex justify-between"><span class="text-txt-dim">配音</span><span class="text-txt">${c.voice.enabled?c.voice.style+' · '+c.voice.speed:'关闭'}</span></div><div class="flex justify-between"><span class="text-txt-dim">字幕</span><span class="text-txt">${c.subtitle.enabled?c.subtitle.font+' · '+c.subtitle.color+' · '+c.subtitle.position:'关闭'}</span></div><div class="flex justify-between"><span class="text-txt-dim">配乐</span><span class="text-txt">${c.music.enabled?c.music.style:'关闭'}</span></div><div class="flex justify-between"><span class="text-txt-dim">转场</span><span class="text-txt">${c.transition.type} · ${c.transition.duration}</span></div></div></div>
-      <div class="bg-surface rounded-xl p-4 space-y-2"><h3 class="text-xs text-txt-muted font-medium uppercase tracking-wider">输出配置</h3><div class="text-sm space-y-1.5"><div class="flex justify-between"><span class="text-txt-dim">数量</span><span class="text-txt">${c.output.count} 条</span></div><div class="flex justify-between"><span class="text-txt-dim">时长</span><span class="text-txt">${c.output.duration} / 条</span></div><div class="flex justify-between"><span class="text-txt-dim">比例</span><span class="text-txt">${c.output.ratio}</span></div><div class="flex justify-between"><span class="text-txt-dim">分辨率</span><span class="text-txt">${c.output.resolution}</span></div><div class="flex justify-between"><span class="text-txt-dim">格式</span><span class="text-txt">MP4</span></div></div></div>
+    <!-- ===== 工作台页面 ===== -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <h2>工作台</h2>
+        <p>数据概览与快速操作</p>
+      </div>
+      <!-- ★ 新增：待分析素材统计卡片 -->
+      <div class="stat-grid">
+        <div class="card stat-card">
+          <div class="stat-icon" style="background:var(--primary-soft);color:var(--primary)"><i class="fas fa-photo-video"></i></div>
+          <div class="stat-deco" style="background:var(--primary)"></div>
+          <div class="stat-label">素材总量</div>
+          <div class="stat-value">1,256</div>
+          <div class="stat-sub">覆盖 8 个主题</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon" style="background:rgba(108,140,255,.12);color:var(--blue)"><i class="fas fa-plus-circle"></i></div>
+          <div class="stat-deco" style="background:var(--blue)"></div>
+          <div class="stat-label">今日新增</div>
+          <div class="stat-value">42</div>
+          <div class="stat-sub">较昨日 <span style="color:#22c55e">+12%</span></div>
+        </div>
+        <!-- ★ 新增卡片：待分析素材 -->
+        <div class="card stat-card">
+          <div class="stat-icon" style="background:rgba(255,176,32,.12);color:var(--yellow)"><i class="fas fa-magnifying-glass-chart"></i></div>
+          <div class="stat-deco" style="background:var(--yellow)"></div>
+          <div class="stat-label">待分析素材</div>
+          <div class="stat-value">18</div>
+          <div class="stat-sub">正在队列中处理</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-icon" style="background:rgba(255,143,92,.12);color:var(--orange)"><i class="fas fa-film"></i></div>
+          <div class="stat-deco" style="background:var(--orange)"></div>
+          <div class="stat-label">产出视频</div>
+          <div class="stat-value">328</div>
+          <div class="stat-sub">15 个任务已完成</div>
+        </div>
+      </div>
+      <div class="quick-actions">
+        <button class="btn-primary" onclick="switchPage('collect')"><i class="fas fa-download"></i>新建采集任务</button>
+        <button class="btn-outline" onclick="switchPage('workflow')"><i class="fas fa-magic"></i>开始自动剪辑</button>
+      </div>
+      <div class="recent-tasks">
+        <h3>最近任务</h3>
+        <div class="task-row">
+          <div class="task-icon"><i class="fas fa-film"></i></div>
+          <div class="task-info">
+            <p>奶茶_混剪_1430</p>
+            <span>5条 × 15s · 9:16 · 1080p · 快节奏</span>
+          </div>
+          <span class="status-tag done"><i class="fas fa-check" style="font-size:9px"></i>已完成</span>
+        </div>
+        <div class="task-row">
+          <div class="task-icon"><i class="fas fa-film"></i></div>
+          <div class="task-info">
+            <p>火锅_混剪_1600</p>
+            <span>10条 × 20s · 16:9 · 1080p · 常规</span>
+          </div>
+          <span class="status-tag processing">处理中</span>
+        </div>
+        <div class="task-row">
+          <div class="task-icon"><i class="fas fa-film"></i></div>
+          <div class="task-info">
+            <p>护肤_混剪_0930</p>
+            <span>5条 × 15s · 9:16 · 720p · 慢节奏</span>
+          </div>
+          <span class="status-tag failed"><i class="fas fa-times" style="font-size:9px"></i>失败</span>
+        </div>
+      </div>
+      <div style="margin-top:24px">
+        <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">热门主题</h3>
+        <div class="theme-cloud">
+          <div class="theme-tag" onclick="switchPage('materials')"><i class="fas fa-mug-hot"></i>奶茶 <span style="color:var(--txt-muted)">(186)</span></div>
+          <div class="theme-tag" onclick="switchPage('materials')"><i class="fas fa-fire"></i>火锅 <span style="color:var(--txt-muted)">(142)</span></div>
+          <div class="theme-tag" onclick="switchPage('materials')"><i class="fas fa-drumstick-bite"></i>烧烤 <span style="color:var(--txt-muted)">(98)</span></div>
+          <div class="theme-tag" onclick="switchPage('materials')"><i class="fas fa-spa"></i>护肤 <span style="color:var(--txt-muted)">(76)</span></div>
+          <div class="theme-tag" onclick="switchPage('materials')"><i class="fas fa-dumbbell"></i>健身 <span style="color:var(--txt-muted)">(65)</span></div>
+          <div class="theme-tag" onclick="switchPage('materials')"><i class="fas fa-plane"></i>旅游 <span style="color:var(--txt-muted)">(54)</span></div>
+          <div class="theme-tag" onclick="switchPage('materials')"><i class="fas fa-shirt"></i>穿搭 <span style="color:var(--txt-muted)">(43)</span></div>
+          <div class="theme-tag" onclick="switchPage('materials')"><i class="fas fa-mobile-screen"></i>数码 <span style="color:var(--txt-muted)">(38)</span></div>
+        </div>
+      </div>
     </div>
-    <div class="bg-surface rounded-xl p-4"><h3 class="text-xs text-txt-muted font-medium uppercase tracking-wider mb-3">素材预览</h3><div class="flex gap-2 overflow-x-auto pb-2">${state.wfSelectedMats.map(m=>`<img src="${m.thumb}" class="w-20 h-28 object-cover rounded-lg flex-shrink-0 border border-border" title="${m.title}" />`).join('')}</div></div>
-    <div class="flex justify-between pt-2"><button class="btn-outline px-5 py-2.5 rounded-lg text-sm" onclick="goWFStep(3)"><i class="fas fa-arrow-left mr-1"></i>上一步</button><button class="btn-primary px-8 py-2.5 rounded-lg text-sm text-base" onclick="submitTask()"><i class="fas fa-rocket mr-2"></i>提交生成</button></div>
-  </div>`;
-}
 
-function renderTasks(){
-  const filters=['all','queue','processing','done','failed'];
-  const fn={all:'全部',queue:'排队中',processing:'处理中',done:'已完成',failed:'失败'};
-  const af=state.taskFilter||'all';
-  let f=state.tasks;if(af!=='all')f=f.filter(t=>t.status===af);
-  return`<div class="fade-in p-6 space-y-5 relative z-10">
-    <div><h1 class="text-2xl font-bold font-display text-txt">任务管理</h1><p class="text-txt-dim text-sm mt-1">共 ${state.tasks.length} 个任务</p></div>
-    <div class="flex items-center gap-2">${filters.map(fi=>`<button class="tag-btn px-3 py-1.5 rounded-lg border border-border text-sm ${af===fi?'active':'text-txt-dim'}" onclick="state.taskFilter='${fi}';renderPage()">${fn[fi]}${fi!=='all'?` <span class="text-xs opacity-60">${state.tasks.filter(t=>fi==='all'||t.status===fi).length}</span>`:''}</button>`).join('')}</div>
-    ${f.length===0?`<div class="text-center py-20 text-txt-muted"><i class="fas fa-inbox text-4xl mb-4 block opacity-30"></i><p>${state.tasks.length===0?'暂无任务记录':'该分类下暂无任务'}</p>${state.tasks.length===0?'<button class="btn-primary px-4 py-2 rounded-lg text-sm mt-4" onclick="navigateTo(\'workflow\')">创建任务</button>':''}</div>`:
-    `<div class="space-y-3">${f.map(t=>{const sm={queue:{text:'排队中',color:'text-txt-dim',bg:'bg-txt-muted/20',dot:'bg-txt-muted'},processing:{text:'处理中',color:'text-info',bg:'bg-info/15',dot:'bg-info'},done:{text:'已完成',color:'text-primary',bg:'bg-primary-soft',dot:'bg-primary'},failed:{text:'失败',color:'text-accent',bg:'bg-accent/10',dot:'bg-accent'}};const s=sm[t.status];return`<div class="task-card bg-card border border-border rounded-xl p-4"><div class="flex items-center gap-4"><div class="w-10 h-10 rounded-xl bg-surface flex items-center justify-center text-txt-muted"><i class="fas fa-video text-sm"></i></div><div class="flex-1 min-w-0"><div class="flex items-center gap-2 flex-wrap"><span class="text-sm font-medium text-txt truncate">${t.name}</span><span class="text-xs px-2 py-0.5 rounded-full ${s.bg} ${s.color} flex items-center gap-1.5"><span class="pulse-dot ${s.dot}"></span>${s.text}</span></div><div class="text-xs text-txt-muted mt-1">${t.config.count}条 × ${t.config.duration} · ${t.config.ratio} · ${t.config.resolution} · 素材${t.matCount}条 · ${t.time}</div>${t.status==='processing'?`<div class="mt-2 h-1.5 bg-surface rounded-full overflow-hidden"><div class="progress-bar-fill h-full bg-info rounded-full" style="width:${t.progress}%"></div></div><div class="text-xs text-info mt-1">${t.progress}% · ${t.logText||''}</div>`:''}</div><div class="flex items-center gap-2 flex-shrink-0">${t.status==='done'?`<button class="btn-primary px-3 py-1.5 rounded-lg text-xs" onclick="previewTaskOutput('${t.id}')"><i class="fas fa-play mr-1"></i>预览成片</button><button class="btn-outline px-3 py-1.5 rounded-lg text-xs" onclick="showToast('正在打包 ${t.config.count} 条视频下载...','info')"><i class="fas fa-download mr-1"></i>下载全部</button>`:''}${t.status==='failed'?`<button class="btn-outline px-3 py-1.5 rounded-lg text-xs" onclick="retryTask('${t.id}')"><i class="fas fa-redo mr-1"></i>重试</button>`:''}<button class="text-txt-muted hover:text-accent text-xs p-1.5" onclick="deleteTask('${t.id}')"><i class="fas fa-trash-alt"></i></button></div></div></div>`}).join('')}</div>`}
-  </div>`;
-}
-
-function renderCollect(){
-  const pl=['抖音','快手','B站','小红书'];
-  return`<div class="fade-in p-6 space-y-6 relative z-10">
-    <div><h1 class="text-2xl font-bold font-display text-txt">素材采集</h1><p class="text-txt-dim text-sm mt-1">配置脚本参数，自动从视频平台采集素材</p></div>
-    <div class="bg-card border border-border rounded-xl p-6 space-y-5 max-w-2xl">
-      <div class="space-y-2"><label class="text-sm font-medium text-txt">搜索关键词</label><input type="text" id="collect-kw" placeholder="多个关键词用逗号分隔，如：奶茶,珍珠奶茶,手打柠檬茶" value="${state.collectKeywords}" class="w-full text-sm" oninput="state.collectKeywords=this.value" ${state.collecting?'disabled':''}/><p class="text-xs text-txt-muted">脚本将分别按每个关键词搜索下载</p></div>
-      <div class="space-y-2"><label class="text-sm font-medium text-txt">目标平台</label><div class="flex gap-2">${pl.map(p=>`<button class="tag-btn px-4 py-2 rounded-lg border border-border text-sm flex items-center gap-2 ${state.collectPlatforms.includes(p)?'active':'text-txt-dim'}" onclick="toggleCollectPlatform('${p}')"><i class="${SOURCE_MAP[p]}" style="color:${SOURCE_COLOR[p]}"></i>${p}</button>`).join('')}</div></div>
-      <div class="grid grid-cols-2 gap-4"><div class="space-y-2"><label class="text-sm font-medium text-txt">每个关键词下载数量</label><select class="w-full text-sm" onchange="state.collectCount=+this.value" ${state.collecting?'disabled':''}>${[5,10,20,30,50].map(n=>`<option ${state.collectCount===n?'selected':''}>${n}</option>`).join('')}</select></div><div class="space-y-2"><label class="text-sm font-medium text-txt">视频时长范围</label><select class="w-full text-sm" disabled><option>3-60秒</option></select></div></div>
-      ${state.collecting?`<div class="space-y-3 pt-2"><div class="flex items-center justify-between"><span class="text-sm text-txt">采集进度</span><span class="text-sm text-primary font-medium">${state.collectProgress}%</span></div><div class="h-2 bg-surface rounded-full overflow-hidden"><div class="progress-bar-fill h-full bg-gradient-to-r from-primary to-primary-dim rounded-full" style="width:${state.collectProgress}%"></div></div><div class="text-xs text-txt-muted">正在采集：${state.collectKeywords.split(',')[0]?.trim()||''} - 抖音 (第 ${Math.ceil(state.collectProgress*state.collectCount/100)} / ${state.collectCount} 条)</div></div>`:''}
-      <div class="flex items-center gap-3 pt-2"><button class="btn-primary px-6 py-2.5 rounded-lg text-sm" ${state.collecting||!state.collectKeywords?'disabled':''} onclick="startCollect()">${state.collecting?'采集中...':'<i class="fas fa-play mr-2"></i>开始采集'}</button>${state.collecting?`<button class="btn-outline px-4 py-2.5 rounded-lg text-sm" onclick="stopCollect()">停止</button>`:''}</div>
+    <!-- ===== 素材库页面 ===== -->
+    <div class="page" id="page-materials">
+      <div class="page-header">
+        <h2>素材库</h2>
+        <p>浏览、搜索和管理所有素材</p>
+      </div>
+      <div class="filter-bar">
+        <div class="search-box">
+          <i class="fas fa-search"></i>
+          <input type="text" placeholder="搜索标题、关键词、标签..." id="materialSearch">
+        </div>
+        <div class="filter-group">
+          <label>来源</label>
+          <span class="tag-btn active">全部</span>
+          <span class="tag-btn">抖音</span>
+          <span class="tag-btn">快手</span>
+          <span class="tag-btn">B站</span>
+          <span class="tag-btn">小红书</span>
+        </div>
+        <!-- ★ 新增：素材类型筛选 -->
+        <div class="filter-group">
+          <label>素材类型</label>
+          <span class="tag-btn active" data-type="all">全部</span>
+          <span class="tag-btn" data-type="food_action">食物制作</span>
+          <span class="tag-btn" data-type="people_talking">人物互动</span>
+          <span class="tag-btn" data-type="scenery">风景静态</span>
+          <span class="tag-btn" data-type="product_show">产品展示</span>
+          <span class="tag-btn" data-type="ambience">氛围场景</span>
+          <span class="tag-btn" data-type="other">其他</span>
+        </div>
+        <div class="filter-group">
+          <label>标签</label>
+          <span class="tag-btn active">全部</span>
+          <span class="tag-btn">奶茶</span>
+          <span class="tag-btn">制作</span>
+          <span class="tag-btn">特写</span>
+          <span class="tag-btn">门店</span>
+        </div>
+      </div>
+      <div class="material-grid" id="materialGrid">
+        <!-- 素材卡片通过JS渲染 -->
+      </div>
     </div>
-    <div class="bg-card border border-border rounded-xl p-5 max-w-2xl"><h2 class="font-semibold text-txt text-sm mb-3">采集说明</h2><div class="space-y-2 text-xs text-txt-dim leading-relaxed"><p><i class="fas fa-circle text-[4px] text-primary mr-2 align-middle"></i>脚本基于 yt-dlp + Playwright，支持抖音、快手、B站、小红书</p><p><i class="fas fa-circle text-[4px] text-primary mr-2 align-middle"></i>自动计算视频 MD5 去重，已存在素材库中的跳过</p><p><i class="fas fa-circle text-[4px] text-primary mr-2 align-middle"></i>自动提取元信息，按关键词打标签入库</p><p><i class="fas fa-circle text-[4px] text-primary mr-2 align-middle"></i>建议每个关键词下载 10-20 条，避免平台限流</p></div></div>
-  </div>`;
-}
 
-// ===== 成片预览 =====
-function genSubSegs(text,totalSec){
-  const segCount=Math.min(Math.ceil(text.length/4),5);
-  const segs=[];const segLen=Math.ceil(text.length/segCount);
-  for(let i=0;i<segCount;i++){
-    const s=Math.round((i/segCount)*totalSec*10)/10;
-    const e=Math.round(((i+1)/segCount)*totalSec*10)/10;
-    segs.push({text:text.slice(i*segLen,(i+1)*segLen),start:s,end:e});
-  }
-  return segs;
-}
+    <!-- ===== 剪辑工作流页面 ===== -->
+    <div class="page" id="page-workflow">
+      <div class="page-header">
+        <h2>剪辑工作流</h2>
+        <p>配置参数，批量生成广告视频</p>
+      </div>
+      <div class="step-bar">
+        <div class="step-item current" data-step="1"><div class="step-dot">1</div><span class="step-label">选择主题</span></div>
+        <div class="step-line"></div>
+        <div class="step-item" data-step="2"><div class="step-dot">2</div><span class="step-label">素材编排</span></div>
+        <div class="step-line"></div>
+        <div class="step-item" data-step="3"><div class="step-dot">3</div><span class="step-label">参数配置</span></div>
+        <div class="step-line"></div>
+        <div class="step-item" data-step="4"><div class="step-dot">4</div><span class="step-label">确认提交</span></div>
+      </div>
 
-function genOutputVideos(task){
-  const theme=task.theme||'奶茶';
-  const count=task.config.count;
-  const durSec=parseInt(task.config.duration);
-  const copies=AD_COPY[theme]||AD_COPY['奶茶'];
-  const tm=MATERIALS.filter(m=>m.keyword===theme);
-  const videos=[];
-  for(let i=0;i<count;i++){
-    const shuffled=[...tm].sort(()=>Math.random()-.5);
-    const cover=shuffled.slice(0,Math.min(3,shuffled.length));
-    videos.push({
-      index:i+1,
-      filename:`${theme}_广告_${String(i+1).padStart(2,'0')}_${task.config.ratio.replace(':','x')}_${task.config.resolution}.mp4`,
-      duration:durSec,
-      size:(durSec*0.6+Math.random()*2).toFixed(1),
-      copyText:copies[i%copies.length],
-      coverThumbs:cover.map(m=>m.thumb),
-      subtitleSegments:genSubSegs(copies[i%copies.length],durSec),
-    });
-  }
-  return videos;
-}
+      <!-- Step 1 -->
+      <div class="step-content active" id="step-1">
+        <div class="theme-grid">
+          <div class="theme-card selected" data-theme="奶茶"><div class="theme-icon">🧋</div><div class="theme-name">奶茶</div><div class="theme-count">186 条素材 · 已分析 180</div></div>
+          <div class="theme-card" data-theme="火锅"><div class="theme-icon">🍲</div><div class="theme-name">火锅</div><div class="theme-count">142 条素材 · 已分析 142</div></div>
+          <div class="theme-card" data-theme="烧烤"><div class="theme-icon">🍖</div><div class="theme-name">烧烤</div><div class="theme-count">98 条素材 · 已分析 90</div></div>
+          <div class="theme-card" data-theme="护肤"><div class="theme-icon">🧴</div><div class="theme-name">护肤</div><div class="theme-count">76 条素材 · 已分析 76</div></div>
+          <div class="theme-card" data-theme="健身"><div class="theme-icon">💪</div><div class="theme-name">健身</div><div class="theme-count">65 条素材 · 已分析 60</div></div>
+          <div class="theme-card" data-theme="旅游"><div class="theme-icon">✈️</div><div class="theme-name">旅游</div><div class="theme-count">54 条素材 · 已分析 54</div></div>
+          <div class="theme-card" data-theme="穿搭"><div class="theme-icon">👗</div><div class="theme-name">穿搭</div><div class="theme-count">43 条素材 · 已分析 38</div></div>
+          <div class="theme-card" data-theme="数码"><div class="theme-icon">📱</div><div class="theme-name">数码</div><div class="theme-count">38 条素材 · 已分析 35</div></div>
+        </div>
+        <div class="step-actions"><button class="btn-primary">下一步 <i class="fas fa-arrow-right"></i></button></div>
+      </div>
 
-function previewTaskOutput(taskId){
-  const task=state.tasks.find(t=>t.id===taskId);
-  if(!task)return;
-  const videos=genOutputVideos(task);
-  const theme=task.theme||'奶茶';
-  const thInfo=THEMES.find(t=>t.name===theme);
-  const thColor=thInfo?thInfo.color:'#ff3d8b';
-  const thIcon=thInfo?thInfo.icon:'fa-tag';
-  const sc=task.subtitleConfig||{enabled:true,position:'底部居中',color:'白色',stroke:true,font:'思源黑体'};
-  const posClass={bottomcenter:'bottom-center',bottomleft:'bottom-left',topcenter:'top-center'};
-  const posCls=posClass[sc.position.replace(/ /g,'').toLowerCase()]||'bottom-center';
+      <!-- Step 2 -->
+      <div class="step-content" id="step-2">
+        <div class="material-pool">
+          <div class="pool-panel">
+            <h4><i class="fas fa-layer-group" style="color:var(--primary);font-size:12px"></i> 可选素材 — 奶茶 <span class="count">(186)</span></h4>
+            <div id="availablePool"></div>
+          </div>
+          <div class="pool-panel selected-pool">
+            <h4><i class="fas fa-check-circle" style="color:var(--primary);font-size:12px"></i> 已选素材 <span class="count">3 / 最少 3 条</span></h4>
+            <div id="selectedPool"></div>
+          </div>
+        </div>
+        <div class="step-actions">
+          <button class="btn-outline"><i class="fas fa-arrow-left"></i> 上一步</button>
+          <button class="btn-primary">下一步 <i class="fas fa-arrow-right"></i></button>
+        </div>
+      </div>
 
-  state.playerState={
-    currentVideo:0,isPlaying:false,currentTime:0,duration:videos[0].duration,
-    videos,interval:null,subtitleConfig:sc
-  };
-  const ps=state.playerState;
-
-  showModal(`<div class="flex flex-col" style="height:560px">
-    <div class="flex items-center justify-between px-5 py-3 border-b border-border flex-shrink-0">
-      <div class="flex items-center gap-3"><i class="fas ${thIcon}" style="color:${thColor}"></i><div><h2 class="text-sm font-semibold text-txt">${task.name} — 成片预览</h2><p class="text-xs text-txt-muted">${videos.length} 条 · ${task.config.duration}/条 · ${task.config.ratio} · ${task.config.resolution}</p></div></div>
-      <div class="flex items-center gap-2"><button class="btn-outline px-3 py-1.5 rounded-lg text-xs" onclick="showToast('正在打包 ${task.config.count} 条视频...','info')"><i class="fas fa-download mr-1"></i>打包下载</button><button class="w-8 h-8 rounded-lg bg-surface text-txt-muted hover:text-txt flex items-center justify-center" onclick="closeModal()"><i class="fas fa-times text-sm"></i></button></div>
-    </div>
-    <div class="flex flex-1 min-h-0">
-      <div class="flex-1 p-4 flex flex-col min-w-0">
-        <div class="video-player flex-1 relative" id="vp-container">
-          <div class="absolute inset-0" id="vp-cover"><div class="w-full h-full grid grid-cols-${Math.min(3,videos[0].coverThumbs.length)} gap-px">${videos[0].coverThumbs.map(t=>`<img src="${t}" class="w-full h-full object-cover"/>`).join('')}</div><div class="absolute inset-0 bg-black/30"></div></div>
-          <div id="vp-subtitle" class="subtitle-overlay ${posCls}" style="display:${sc.enabled?'':'none'}"><span class="subtitle-text ${sc.color} ${sc.stroke?'stroke':''}" id="vp-subtitle-text" style="font-family:'${sc.font||'思源黑体'}',sans-serif;opacity:0"></span></div>
-          <button class="vp-big-play" id="vp-big-play" onclick="togglePlay()"><i class="fas fa-play text-2xl ml-1" id="vp-big-icon"></i></button>
-          <div class="vp-controls">
-            <div class="vp-progress" id="vp-progress" onclick="seekPlayer(event)"><div class="vp-progress-fill" id="vp-progress-fill" style="width:0%"></div></div>
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3"><button class="vp-play-btn" onclick="togglePlay()" id="vp-play-btn"><i class="fas fa-play text-sm" id="vp-play-icon"></i></button><span class="text-xs text-white/80 font-mono" id="vp-time">00:00 / ${fmtDur(videos[0].duration)}</span></div>
-              <div class="flex items-center gap-2"><button class="text-white/50 hover:text-white text-xs p-1" onclick="switchPrev()" title="上一条"><i class="fas fa-backward-step"></i></button><button class="text-white/50 hover:text-white text-xs p-1" onclick="switchNext()" title="下一条"><i class="fas fa-forward-step"></i></button><span class="text-xs text-white/40 ml-1" id="vp-filename">${videos[0].filename}</span></div>
+      <!-- Step 3 -->
+      <div class="step-content" id="step-3">
+        <div class="config-sections">
+          <!-- 配音设置 -->
+          <div class="config-group">
+            <div class="config-header">
+              <div class="config-title"><i class="fas fa-microphone"></i>配音设置</div>
+              <div class="switch on" data-config="voice"></div>
+            </div>
+            <div class="config-row"><label>配音风格</label><select><option>活力女声</option><option>沉稳男声</option><option>可爱女声</option><option>磁性男声</option></select></div>
+            <div class="config-row"><label>语速</label><select><option>0.8x</option><option selected>1.0x</option><option>1.2x</option><option>1.5x</option></select></div>
+            <div class="config-row"><label>音量</label><input type="range" min="0" max="100" value="80" style="width:120px"><span style="font-size:11px;color:var(--txt-dim);margin-left:6px;width:24px">80</span></div>
+          </div>
+          <!-- 字幕设置 -->
+          <div class="config-group">
+            <div class="config-header">
+              <div class="config-title"><i class="fas fa-closed-captioning"></i>字幕设置</div>
+              <div class="switch on" data-config="subtitle"></div>
+            </div>
+            <div class="config-row"><label>位置</label><select><option selected>底部居中</option><option>底部左对齐</option><option>顶部居中</option></select></div>
+            <div class="config-row"><label>字体</label><select><option selected>思源黑体</option><option>思源宋体</option><option>站酷快乐体</option></select></div>
+            <div class="config-row"><label>字号</label><select><option>小</option><option selected>中</option><option>大</option></select></div>
+            <div class="config-row"><label>颜色</label><select><option selected>白色</option><option>黄色</option><option>青色</option></select></div>
+            <div class="config-row"><label>描边</label><div class="switch on" style="transform:scale(.85)"></div></div>
+          </div>
+          <!-- 配乐设置 -->
+          <div class="config-group">
+            <div class="config-header">
+              <div class="config-title"><i class="fas fa-music"></i>配乐设置</div>
+              <div class="switch on" data-config="music"></div>
+            </div>
+            <div class="config-row"><label>音乐风格</label><select><option selected>轻快</option><option>抒情</option><option>动感</option><option>古风</option><option>电子</option></select></div>
+            <div class="config-row"><label>音量</label><input type="range" min="0" max="100" value="30" style="width:120px"><span style="font-size:11px;color:var(--txt-dim);margin-left:6px;width:24px">30</span></div>
+          </div>
+          <!-- ★ 新增：混剪策略设置 -->
+          <div class="config-group">
+            <div class="config-header">
+              <div class="config-title"><i class="fas fa-scissors"></i>混剪策略</div>
+            </div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:12px;color:var(--txt-dim);display:block;margin-bottom:6px">混剪风格</label>
+              <div class="style-cards">
+                <div class="style-card" data-style="fast"><div class="style-label">快节奏</div><div class="style-desc">2-4秒/段，适合抖音</div></div>
+                <div class="style-card active" data-style="normal"><div class="style-label">常规</div><div class="style-desc">3-6秒/段，通用</div></div>
+                <div class="style-card" data-style="slow"><div class="style-label">慢节奏</div><div class="style-desc">5-10秒/段，适合小红书</div></div>
+              </div>
+            </div>
+            <div class="config-row">
+              <label>允许变速</label>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div class="switch on" data-config="speedup"></div>
+                <span style="font-size:10px;color:var(--txt-muted)">（吃东西/动作类加速，说话类保持原速）</span>
+              </div>
+            </div>
+            <div style="margin-bottom:10px">
+              <label style="font-size:12px;color:var(--txt-dim);display:block;margin-bottom:6px">最大变速倍率</label>
+              <div class="speed-btns">
+                <div class="speed-btn" data-speed="2x">2x<div class="speed-sub">轻微加速</div></div>
+                <div class="speed-btn active" data-speed="3x">3x<div class="speed-sub">适中</div></div>
+                <div class="speed-btn" data-speed="5x">5x<div class="speed-sub">快闪</div></div>
+              </div>
+            </div>
+            <div class="config-row">
+              <label>优先使用高光片段</label>
+              <div class="switch on" data-config="highlights"></div>
+            </div>
+          </div>
+          <!-- 转场与输出 -->
+          <div class="config-group" style="grid-column:1/-1">
+            <div class="config-header">
+              <div class="config-title"><i class="fas fa-sliders-h"></i>转场与输出</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="config-row"><label>转场效果</label><select><option selected>溶解</option><option>滑动</option><option>缩放</option><option>模糊</option><option>无</option></select></div>
+              <div class="config-row"><label>转场时长</label><select><option>0.3s</option><option selected>0.5s</option><option>0.8s</option><option>1.0s</option></select></div>
+              <div class="config-row"><label>输出数量</label><select><option>3</option><option selected>5</option><option>10</option><option>15</option><option>20</option></select></div>
+              <div class="config-row"><label>单条时长</label><select><option>10s</option><option selected>15s</option><option>20s</option><option>30s</option></select></div>
+              <div class="config-row"><label>画面比例</label><select><option selected>9:16</option><option>16:9</option><option>1:1</option></select></div>
+              <div class="config-row"><label>分辨率</label><select><option>720p</option><option selected>1080p</option></select></div>
             </div>
           </div>
         </div>
+        <div class="step-actions">
+          <button class="btn-outline"><i class="fas fa-arrow-left"></i> 上一步</button>
+          <button class="btn-primary">下一步 <i class="fas fa-arrow-right"></i></button>
+        </div>
       </div>
-      <div class="w-56 border-l border-border flex flex-col bg-surface/60 flex-shrink-0">
-        <div class="px-3 py-2.5 border-b border-border flex-shrink-0"><span class="text-xs text-txt-muted font-medium uppercase tracking-wider">产出列表 (${videos.length})</span></div>
-        <div class="flex-1 overflow-y-auto p-2 space-y-1.5" id="vp-list">
-          ${videos.map((v,i)=>`<div class="output-thumb rounded-lg border border-border p-1.5 ${i===0?'active-thumb':''}" data-vi="${i}" onclick="switchVideo(${i})">
-            <div class="relative aspect-[9/14] rounded-md overflow-hidden mb-1 bg-bg"><div class="w-full h-full grid grid-cols-${Math.min(3,v.coverThumbs.length)} gap-px">${v.coverThumbs.map(t=>`<img src="${t}" class="w-full h-full object-cover"/>`).join('')}</div><div class="absolute inset-0 bg-black/20"></div><div class="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded">${fmtDur(v.duration)}</div><div class="absolute top-1 left-1 bg-primary/90 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">#${v.index}</div><div class="thumb-play absolute inset-0 bg-black/25 flex items-center justify-center"><div class="w-7 h-7 rounded-full bg-primary/30 backdrop-blur-sm flex items-center justify-center"><i class="fas fa-play text-white text-[10px] ml-px"></i></div></div></div>
-            <div class="text-[11px] text-txt truncate px-0.5">${v.copyText}</div>
-            <div class="text-[10px] text-txt-muted px-0.5">${v.size}MB</div>
-          </div>`).join('')}
+
+      <!-- Step 4 -->
+      <div class="step-content" id="step-4">
+        <div class="summary-grid">
+          <div class="summary-card">
+            <h5>主题与素材</h5>
+            <div class="summary-item"><span>主题</span><span>🧋 奶茶</span></div>
+            <div class="summary-item"><span>已选素材</span><span>5 条</span></div>
+            <div class="summary-item"><span>素材总时长</span><span>47.2s</span></div>
+          </div>
+          <!-- ★ 新增：混剪策略摘要 -->
+          <div class="summary-card">
+            <h5>混剪策略</h5>
+            <div class="summary-item"><span>风格</span><span>常规</span></div>
+            <div class="summary-item"><span>允许变速</span><span style="color:#22c55e">开启</span></div>
+            <div class="summary-item"><span>最大倍率</span><span>3x</span></div>
+            <div class="summary-item"><span>优先高光</span><span style="color:#22c55e">开启</span></div>
+          </div>
+          <div class="summary-card">
+            <h5>配音/字幕/配乐</h5>
+            <div class="summary-item"><span>配音</span><span style="color:#22c55e">活力女声 1.0x</span></div>
+            <div class="summary-item"><span>字幕</span><span style="color:#22c55e">底部居中·思源黑体</span></div>
+            <div class="summary-item"><span>配乐</span><span style="color:#22c55e">轻快</span></div>
+          </div>
+          <div class="summary-card">
+            <h5>输出配置</h5>
+            <div class="summary-item"><span>数量</span><span>5 条</span></div>
+            <div class="summary-item"><span>时长</span><span>15s</span></div>
+            <div class="summary-item"><span>比例</span><span>9:16</span></div>
+            <div class="summary-item"><span>分辨率</span><span>1080p</span></div>
+          </div>
+        </div>
+        <div style="margin-bottom:20px">
+          <h5 style="font-size:12px;color:var(--txt-muted);margin-bottom:10px">素材预览</h5>
+          <div class="material-preview-strip">
+            <div class="strip-item"><img src="https://picsum.photos/seed/m1/80/107.jpg" alt=""></div>
+            <div class="strip-item"><img src="https://picsum.photos/seed/m2/80/107.jpg" alt=""></div>
+            <div class="strip-item"><img src="https://picsum.photos/seed/m3/80/107.jpg" alt=""></div>
+            <div class="strip-item"><img src="https://picsum.photos/seed/m4/80/107.jpg" alt=""></div>
+            <div class="strip-item"><img src="https://picsum.photos/seed/m5/80/107.jpg" alt=""></div>
+          </div>
+        </div>
+        <div class="step-actions">
+          <button class="btn-outline"><i class="fas fa-arrow-left"></i> 上一步</button>
+          <button class="btn-primary" onclick="showToast('任务已提交，正在排队处理...')"><i class="fas fa-rocket"></i> 提交生成</button>
         </div>
       </div>
     </div>
-  </div>`);
-}
 
-function togglePlay(){
-  const ps=state.playerState;if(!ps)return;
-  ps.isPlaying?pausePlayer():playPlayer();
-}
-function playPlayer(){
-  const ps=state.playerState;if(!ps)return;
-  ps.isPlaying=true;
-  if(ps.currentTime>=ps.duration)ps.currentTime=0;
-  const bb=$('#vp-big-play');const bi=$('#vp-big-icon');const pi=$('#vp-play-icon');
-  if(bb)bb.classList.add('hidden');
-  if(bi)bi.className='fas fa-play text-2xl ml-1';
-  if(pi)pi.className='fas fa-pause text-sm';
-  if(ps.interval)clearInterval(ps.interval);
-  ps.interval=setInterval(()=>{
-    ps.currentTime+=0.1;
-    if(ps.currentTime>=ps.duration){
-      ps.currentTime=ps.duration;pausePlayer();
-      if(ps.currentVideo<ps.videos.length-1){setTimeout(()=>{switchVideo(ps.currentVideo+1);playPlayer()},700)}
-      return;
+    <!-- ===== 任务管理页面 ===== -->
+    <div class="page" id="page-tasks">
+      <div class="page-header">
+        <h2>任务管理</h2>
+        <p>监控任务状态与产出</p>
+      </div>
+      <div class="task-tabs">
+        <div class="task-tab active">全部 <span class="tab-badge">5</span></div>
+        <div class="task-tab">排队中 <span class="tab-badge">1</span></div>
+        <div class="task-tab">处理中 <span class="tab-badge">1</span></div>
+        <div class="task-tab">已完成 <span class="tab-badge">2</span></div>
+        <div class="task-tab">失败 <span class="tab-badge">1</span></div>
+      </div>
+      <div class="task-list">
+        <div class="task-card-item">
+          <div class="tc-icon"><i class="fas fa-film"></i></div>
+          <div class="tc-info">
+            <div class="tc-name">奶茶_混剪_1430</div>
+            <div class="tc-meta">5条 × 15s · 9:16 · 1080p · 快节奏 · 5条素材 · 01-15 14:30</div>
+          </div>
+          <span class="status-tag done"><i class="fas fa-check" style="font-size:9px"></i>已完成</span>
+          <div class="tc-actions">
+            <button class="btn-primary" style="padding:6px 14px;font-size:12px" onclick="openPreview()"><i class="fas fa-play"></i>预览成片</button>
+            <button class="btn-outline" style="padding:6px 14px;font-size:12px"><i class="fas fa-download"></i>下载全部</button>
+          </div>
+        </div>
+        <div class="task-card-item">
+          <div class="tc-icon"><i class="fas fa-film"></i></div>
+          <div class="tc-info">
+            <div class="tc-name">火锅_混剪_1600</div>
+            <div class="tc-meta">10条 × 20s · 16:9 · 1080p · 常规 · 8条素材 · 01-15 16:00</div>
+          </div>
+          <div class="tc-progress">
+            <div class="prog-label"><span>正在智能混剪视频片段...</span><span style="color:var(--primary);font-weight:600">45%</span></div>
+            <div class="progress-bar"><div class="progress-fill" style="width:45%"></div></div>
+          </div>
+          <span class="status-tag processing">处理中</span>
+        </div>
+        <div class="task-card-item">
+          <div class="tc-icon"><i class="fas fa-film"></i></div>
+          <div class="tc-info">
+            <div class="tc-name">烧烤_混剪_1700</div>
+            <div class="tc-meta">5条 × 15s · 9:16 · 720p · 快节奏 · 4条素材 · 01-15 17:00</div>
+          </div>
+          <span class="status-tag" style="background:rgba(255,255,255,.06);color:var(--txt-muted)">排队中</span>
+        </div>
+        <div class="task-card-item">
+          <div class="tc-icon"><i class="fas fa-film"></i></div>
+          <div class="tc-info">
+            <div class="tc-name">护肤_混剪_0930</div>
+            <div class="tc-meta">5条 × 15s · 9:16 · 720p · 慢节奏 · 6条素材 · 01-15 09:30</div>
+          </div>
+          <span class="status-tag failed"><i class="fas fa-times" style="font-size:9px"></i>失败</span>
+          <div class="tc-actions">
+            <button class="btn-outline" style="padding:6px 14px;font-size:12px;border-color:var(--orange);color:var(--orange)"><i class="fas fa-redo"></i>重试</button>
+            <button class="btn-outline" style="padding:6px 14px;font-size:12px;color:var(--txt-muted)"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 素材采集页面 ===== -->
+    <div class="page" id="page-collect">
+      <div class="page-header">
+        <h2>素材采集</h2>
+        <p>配置采集脚本，自动从平台下载素材</p>
+      </div>
+      <div class="card" style="max-width:600px">
+        <div style="margin-bottom:16px">
+          <label style="font-size:12px;color:var(--txt-dim);display:block;margin-bottom:6px">搜索关键词</label>
+          <input type="text" placeholder="多个关键词用逗号分隔，如：奶茶,珍珠奶茶" style="width:100%">
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="font-size:12px;color:var(--txt-dim);display:block;margin-bottom:6px">目标平台</label>
+          <div style="display:flex;gap:8px">
+            <span class="tag-btn active">抖音</span>
+            <span class="tag-btn active">快手</span>
+            <span class="tag-btn">B站</span>
+            <span class="tag-btn">小红书</span>
+          </div>
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="font-size:12px;color:var(--txt-dim);display:block;margin-bottom:6px">每关键词下载数量</label>
+          <select><option>5</option><option selected>10</option><option>20</option><option>30</option><option>50</option></select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+          <div style="flex:1">
+            <label style="font-size:12px;color:var(--txt-dim);display:block;margin-bottom:6px">视频时长范围</label>
+            <select disabled style="opacity:.5"><option>3-60 秒</option></select>
+          </div>
+          <div style="flex:1">
+            <label style="font-size:12px;color:var(--txt-dim);display:block;margin-bottom:6px">最低分辨率</label>
+            <select disabled style="opacity:.5"><option>720p</option></select>
+          </div>
+        </div>
+        <button class="btn-primary" onclick="showToast('采集任务已创建，正在执行...')"><i class="fas fa-download"></i>开始采集</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- 成片预览模态框 -->
+<div class="modal-overlay" id="previewModal">
+  <div class="preview-modal">
+    <div class="preview-topbar">
+      <div class="left">
+        <span style="font-size:16px">🧋</span>
+        <span class="task-theme">奶茶_混剪_1430</span>
+        <span style="font-size:11px;color:var(--txt-muted)">5条 · 15s · 9:16 · 1080p</span>
+      </div>
+      <div class="right">
+        <button class="btn-outline" style="padding:5px 12px;font-size:12px" onclick="showToast('正在打包 5 条视频下载...')"><i class="fas fa-file-archive"></i>打包下载</button>
+        <button class="close-btn" onclick="closePreview()"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div class="preview-body">
+      <div class="preview-player">
+        <div class="preview-video-area">
+          <div class="preview-video-frame" style="width:243px;height:432px">
+            <img class="frame-cover" src="https://picsum.photos/seed/out1/243/432.jpg" alt="">
+            <div class="frame-overlay">
+              <div class="big-play"><i class="fas fa-play" style="margin-left:2px"></i></div>
+            </div>
+            <!-- ★ 字幕叠加层 -->
+            <div class="subtitle-overlay pos-bottom">
+              <div class="subtitle-text" id="subtitleText">这杯奶茶绝了</div>
+            </div>
+          </div>
+        </div>
+        <div class="preview-controls">
+          <button class="ctrl-play"><i class="fas fa-play"></i></button>
+          <div class="ctrl-progress"><div class="ctrl-fill" style="width:35%"></div></div>
+          <span class="ctrl-time">00:05 / 00:15</span>
+          <div class="ctrl-nav">
+            <button><i class="fas fa-step-backward"></i></button>
+            <button><i class="fas fa-step-forward"></i></button>
+          </div>
+        </div>
+      </div>
+      <div class="preview-sidebar">
+        <div class="sidebar-title">产出列表 (5)</div>
+        <div class="preview-list">
+          <div class="preview-list-item active" data-index="0">
+            <div class="pli-thumb"><img src="https://picsum.photos/seed/out1/200/280.jpg" alt=""><span class="pli-index">#1</span><span class="pli-dur">0:15</span></div>
+            <div class="pli-copy">这杯奶茶绝了</div>
+            <div class="pli-size">8.9 MB</div>
+          </div>
+          <div class="preview-list-item" data-index="1">
+            <div class="pli-thumb"><img src="https://picsum.photos/seed/out2/200/280.jpg" alt=""><span class="pli-index">#2</span><span class="pli-dur">0:15</span></div>
+            <div class="pli-copy">一口下去满嘴幸福</div>
+            <div class="pli-size">9.2 MB</div>
+          </div>
+          <div class="preview-list-item" data-index="2">
+            <div class="pli-thumb"><img src="https://picsum.photos/seed/out3/200/280.jpg" alt=""><span class="pli-index">#3</span><span class="pli-dur">0:15</span></div>
+            <div class="pli-copy">珍珠Q弹爽口</div>
+            <div class="pli-size">8.7 MB</div>
+          </div>
+          <div class="preview-list-item" data-index="3">
+            <div class="pli-thumb"><img src="https://picsum.photos/seed/out4/200/280.jpg" alt=""><span class="pli-index">#4</span><span class="pli-dur">0:15</span></div>
+            <div class="pli-copy">手打柠檬茶来了</div>
+            <div class="pli-size">9.0 MB</div>
+          </div>
+          <div class="preview-list-item" data-index="4">
+            <div class="pli-thumb"><img src="https://picsum.photos/seed/out5/200/280.jpg" alt=""><span class="pli-index">#5</span><span class="pli-dur">0:15</span></div>
+            <div class="pli-copy">夏日必喝清凉解暑</div>
+            <div class="pli-size">8.5 MB</div>
+          </div>
+        </div>
+        <!-- ★ 新增：剪辑方案追溯面板 -->
+        <div class="edit-plan-panel" id="editPlanPanel">
+          <div class="epp-title"><i class="fas fa-scissors"></i>剪辑方案追溯</div>
+          <div class="epp-segment">
+            <div class="epp-time">00:00-00:03</div>
+            <div class="epp-bar speedup"><div class="epp-fill"></div><span>奶茶摇制过程</span></div>
+            <span class="epp-strategy speedup">5x变速</span>
+          </div>
+          <div class="epp-segment">
+            <div class="epp-time">00:03-00:08</div>
+            <div class="epp-bar cut_highlight"><div class="epp-fill"></div><span>倒奶茶特写</span></div>
+            <span class="epp-strategy cut_highlight">截取高光</span>
+          </div>
+          <div class="epp-segment">
+            <div class="epp-time">00:08-00:11</div>
+            <div class="epp-bar cut_mid"><div class="epp-fill"></div><span>店面环境</span></div>
+            <span class="epp-strategy cut_mid">原速截取</span>
+          </div>
+          <div class="epp-segment">
+            <div class="epp-time">00:11-00:13</div>
+            <div class="epp-bar speedup"><div class="epp-fill"></div><span>加料过程</span></div>
+            <span class="epp-strategy speedup">3x变速</span>
+          </div>
+          <div class="epp-segment">
+            <div class="epp-time">00:13-00:15</div>
+            <div class="epp-bar cut_highlight"><div class="epp-fill"></div><span>成品展示</span></div>
+            <span class="epp-strategy cut_highlight">截取高光</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 素材预览模态框 -->
+<div class="material-modal" id="materialModal">
+  <div class="material-modal-content">
+    <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;font-weight:600" id="mmTitle">奶茶摇制过程特写</span>
+      <button class="close-btn" onclick="closeMaterialModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="mm-video">
+      <img id="mmCover" src="https://picsum.photos/seed/m1/480/270.jpg" alt="">
+      <div class="mm-play"><i class="fas fa-play" style="margin-left:2px"></i></div>
+    </div>
+    <!-- ★ 新增：高光可视化条 -->
+    <div class="mm-highlight-bar" id="mmHighlightBar">
+      <div class="seg" style="left:14%;width:38%" title="2.1s - 8.5s 运动评分 45.2"></div>
+      <div class="seg" style="left:62%;width:18%" title="11.0s - 14.2s 运动评分 38.1"></div>
+    </div>
+    <div class="mm-body">
+      <div class="mm-meta">
+        <div class="mm-meta-item"><div class="mm-meta-val">0:08</div><div class="mm-meta-label">时长</div></div>
+        <div class="mm-meta-item"><div class="mm-meta-val">1080×1920</div><div class="mm-meta-label">分辨率</div></div>
+        <div class="mm-meta-item"><div class="mm-meta-val">12.5 MB</div><div class="mm-meta-label">大小</div></div>
+        <!-- ★ 新增：素材类型显示 -->
+        <div class="mm-meta-item"><div class="mm-meta-val" style="color:var(--primary)">食物制作</div><div class="mm-meta-label">素材类型</div></div>
+      </div>
+      <div class="mm-tags">
+        <span>奶茶</span><span>制作</span><span>特写</span>
+      </div>
+      <div style="font-size:11px;color:var(--txt-muted);margin-top:6px">运动评分：<span style="color:var(--primary);font-weight:600">52.3</span> · 高光时段：2段</div>
+      <div class="mm-actions">
+        <button class="btn-primary" style="flex:1;justify-content:center;padding:8px;font-size:12px"><i class="fas fa-download"></i>下载素材</button>
+        <button class="btn-outline" style="flex:1;justify-content:center;padding:8px;font-size:12px"><i class="fas fa-plus"></i>加入工作流</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== 模拟素材数据（含v2.1新增字段） ==========
+const materials = [
+  { id:1, title:'奶茶摇制过程特写', cover:'https://picsum.photos/seed/m1/200/267.jpg', duration:8, width:1080, height:1920, size:'12.5MB', source:'抖音', tags:['奶茶','制作','特写'], type:'food_action', typeLabel:'食物制作', motionScore:52.3, highlights:[{start:2.1,end:8.5,score:45.2},{start:7.0,end:8.0,score:38.1}], analysisDone:true },
+  { id:2, title:'店员推荐饮品互动', cover:'https://picsum.photos/seed/m2/200/267.jpg', duration:15, width:1080, height:1920, size:'18.2MB', source:'抖音', tags:['奶茶','互动'], type:'people_talking', typeLabel:'人物互动', motionScore:18.5, highlights:[{start:0,end:15,score:18.5}], analysisDone:true },
+  { id:3, title:'店面门头街景', cover:'https://picsum.photos/seed/m3/200/267.jpg', duration:6, width:1080, height:1920, size:'9.8MB', source:'快手', tags:['奶茶','门店'], type:'scenery', typeLabel:'风景静态', motionScore:8.2, highlights:[{start:0,end:6,score:8.2}], analysisDone:true },
+  { id:4, title:'珍珠奶茶成品摆拍', cover:'https://picsum.photos/seed/m4/200/267.jpg', duration:10, width:1080, height:1920, size:'15.3MB', source:'小红书', tags:['奶茶','摆拍'], type:'product_show', typeLabel:'产品展示', motionScore:12.1, highlights:[{start:3.0,end:7.0,score:15.3}], analysisDone:true },
+  { id:5, title:'热气蒸腾氛围镜头', cover:'https://picsum.photos/seed/m5/200/267.jpg', duration:5, width:1080, height:1920, size:'7.6MB', source:'抖音', tags:['奶茶','氛围'], type:'ambience', typeLabel:'氛围场景', motionScore:22.4, highlights:[{start:1.0,end:4.5,score:28.1}], analysisDone:true },
+  { id:6, title:'倒奶茶慢动作', cover:'https://picsum.photos/seed/m6/200/267.jpg', duration:12, width:1080, height:1920, size:'20.1MB', source:'B站', tags:['奶茶','制作'], type:'food_action', typeLabel:'食物制作', motionScore:35.6, highlights:[{start:2.0,end:8.0,score:42.1},{start:9.0,end:11.5,score:30.5}], analysisDone:true },
+  { id:7, title:'排队顾客场景', cover:'https://picsum.photos/seed/m7/200/267.jpg', duration:8, width:1080, height:1920, size:'13.0MB', source:'快手', tags:['奶茶','门店'], type:'other', typeLabel:'其他', motionScore:15.0, highlights:[{start:0,end:8,score:15.0}], analysisDone:true },
+  { id:8, title:'手工揉面团过程', cover:'https://picsum.photos/seed/m8/200/267.jpg', duration:10, width:720, height:1280, size:'11.2MB', source:'抖音', tags:['制作','手工'], type:'food_action', typeLabel:'食物制作', motionScore:48.7, highlights:[{start:1.5,end:7.2,score:52.3}], analysisDone:false },
+  { id:9, title:'柠檬切片特写', cover:'https://picsum.photos/seed/m9/200/267.jpg', duration:5, width:1080, height:1920, size:'6.8MB', source:'抖音', tags:['柠檬茶','特写'], type:'product_show', typeLabel:'产品展示', motionScore:null, highlights:[], analysisDone:false },
+  { id:10, title:'调饮师工作日常', cover:'https://picsum.photos/seed/m10/200/267.jpg', duration:20, width:1080, height:1920, size:'28.5MB', source:'小红书', tags:['奶茶','日常'], type:'people_talking', typeLabel:'人物互动', motionScore:null, highlights:[], analysisDone:false },
+  { id:11, title:'冰块入杯特写', cover:'https://picsum.photos/seed/m11/200/267.jpg', duration:4, width:1080, height:1920, size:'5.2MB', source:'快手', tags:['特写'], type:'food_action', typeLabel:'食物制作', motionScore:62.1, highlights:[{start:0.5,end:3.5,score:68.2}], analysisDone:true },
+  { id:12, title:'店内暖光环境', cover:'https://picsum.photos/seed/m12/200/267.jpg', duration:7, width:1080, height:1920, size:'10.1MB', source:'B站', tags:['门店','氛围'], type:'ambience', typeLabel:'氛围场景', motionScore:5.3, highlights:[{start:0,end:7,score:5.3}], analysisDone:true },
+];
+
+// ========== 渲染素材卡片 ==========
+function renderMaterials(filter) {
+  const grid = document.getElementById('materialGrid');
+  let list = materials;
+  if (filter && filter !== 'all') {
+    list = materials.filter(m => m.type === filter);
+  }
+  grid.innerHTML = list.map(m => {
+    const dur = Math.floor(m.duration / 60) + ':' + String(Math.floor(m.duration % 60)).padStart(2, '0');
+    // 高光指示条
+    let highlightHtml = '';
+    if (m.analysisDone && m.highlights && m.highlights.length > 0) {
+      const segs = m.highlights.map(h => {
+        const left = (h.start / m.duration * 100).toFixed(1);
+        const width = ((h.end - h.start) / m.duration * 100).toFixed(1);
+        return `<div class="seg" style="left:${left}%;width:${width}%"></div>`;
+      }).join('');
+      highlightHtml = `<div class="highlight-bar">${segs}</div>`;
     }
-    updatePlayerUI();
-  },100);
-}
-function pausePlayer(){
-  const ps=state.playerState;if(!ps)return;
-  ps.isPlaying=false;
-  if(ps.interval){clearInterval(ps.interval);ps.interval=null}
-  const bb=$('#vp-big-play');const pi=$('#vp-play-icon');
-  if(bb)bb.classList.remove('hidden');
-  if(pi)pi.className='fas fa-play text-sm';
-}
-function seekPlayer(e){
-  const ps=state.playerState;if(!ps)return;
-  const bar=$('#vp-progress');const r=bar.getBoundingClientRect();
-  ps.currentTime=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*ps.duration;
-  updatePlayerUI();
-}
-function switchVideo(idx){
-  const ps=state.playerState;if(!ps||idx<0||idx>=ps.videos.length)return;
-  const was=ps.isPlaying;if(was)pausePlayer();
-  ps.currentVideo=idx;ps.currentTime=0;ps.duration=ps.videos[idx].duration;
-  const v=ps.videos[idx];
-  const cv=$('#vp-cover');
-  if(cv)cv.innerHTML=`<div class="w-full h-full grid grid-cols-${Math.min(3,v.coverThumbs.length)} gap-px">${v.coverThumbs.map(t=>`<img src="${t}" class="w-full h-full object-cover"/>`).join('')}</div><div class="absolute inset-0 bg-black/30"></div>`;
-  const fn=$('#vp-filename');if(fn)fn.textContent=v.filename;
-  const st=$('#vp-subtitle-text');if(st){st.textContent='';st.style.opacity='0'}
-  const pf=$('#vp-progress-fill');if(pf)pf.style.width='0%';
-  updateTimeDisp();
-  document.querySelectorAll('.output-thumb').forEach((el,i)=>el.classList.toggle('active-thumb',i===idx));
-  // 确保当前项可见
-  const activeEl=document.querySelector(`.output-thumb[data-vi="${idx}"]`);
-  if(activeEl)activeEl.scrollIntoView({block:'nearest',behavior:'smooth'});
-  if(was)playPlayer();
-}
-function switchPrev(){const ps=state.playerState;if(!ps)return;switchVideo(ps.currentVideo>0?ps.currentVideo-1:ps.videos.length-1)}
-function switchNext(){const ps=state.playerState;if(!ps)return;switchVideo(ps.currentVideo<ps.videos.length-1?ps.currentVideo+1:0)}
-function updatePlayerUI(){
-  const ps=state.playerState;if(!ps)return;
-  const v=ps.videos[ps.currentVideo];
-  const pf=$('#vp-progress-fill');if(pf)pf.style.width=(ps.currentTime/ps.duration*100)+'%';
-  updateTimeDisp();
-  const st=$('#vp-subtitle-text');
-  if(st&&ps.subtitleConfig.enabled){
-    const seg=v.subtitleSegments.find(s=>ps.currentTime>=s.start&&ps.currentTime<s.end);
-    if(seg){st.textContent=seg.text;st.style.opacity='1'}else{st.style.opacity='0'}
-    st.style.transition='opacity .15s';
-  }
-}
-function updateTimeDisp(){
-  const ps=state.playerState;if(!ps)return;
-  const el=$('#vp-time');if(el)el.textContent=`${fmtDur(Math.floor(ps.currentTime))} / ${fmtDur(ps.duration)}`;
+    // 类型标签
+    let typeHtml = '';
+    if (m.analysisDone) {
+      typeHtml = `<div class="type-badge ${m.type}">${m.typeLabel}</div>`;
+    } else {
+      typeHtml = `<div class="type-badge pending">待分析</div>`;
+    }
+    // 运动评分
+    let scoreHtml = '';
+    if (m.analysisDone && m.motionScore !== null) {
+      scoreHtml = `<span class="motion-score">运动 ${m.motionScore}</span>`;
+    }
+    return `
+      <div class="material-card" onclick="openMaterialModal(${m.id})">
+        <div class="thumb">
+          <img src="${m.cover}" alt="${m.title}" loading="lazy">
+          <span class="duration">${dur}</span>
+          <span class="source-badge"><i class="fas fa-play-circle" style="font-size:9px"></i>${m.source}</span>
+          ${typeHtml}
+          ${highlightHtml}
+          <div class="play-overlay"><div class="play-btn"><i class="fas fa-play" style="margin-left:2px"></i></div></div>
+        </div>
+        <div class="card-body">
+          <div class="title">${m.title}</div>
+          <div class="meta">
+            <span>${m.width}×${m.height}</span>
+            <span>${m.size}</span>
+            ${scoreHtml}
+          </div>
+          <div class="tags">${m.tags.map(t => `<span>${t}</span>`).join('')}</div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
-// ===== 交互逻辑 =====
-function navigateTo(page){
-  state.currentPage=page;state.matSelected.clear();
-  $$('#sidebar-nav .sidebar-item').forEach(el=>{
-    el.classList.toggle('active',el.dataset.page===page);
-    el.dataset.page===page?el.classList.remove('text-txt-dim'):el.classList.add('text-txt-dim');
+// ========== 素材类型筛选交互 ==========
+document.querySelectorAll('.filter-group .tag-btn[data-type]').forEach(btn => {
+  btn.addEventListener('click', function() {
+    this.parentElement.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    renderMaterials(this.dataset.type);
   });
-  renderPage();
-}
-function renderPage(){
-  const app=$('#app');
-  const bgBlobs=app.querySelector('.float-blob')?'':'';
-  // 保留背景装饰
-  const bgHTML=`<div class="float-blob absolute top-20 right-40 w-80 h-80 rounded-full bg-primary/[.03] blur-3xl"></div><div class="float-blob absolute bottom-20 left-20 w-60 h-60 rounded-full bg-primary/[.02] blur-3xl" style="animation-delay:-4s"></div>`;
-  let content='';
-  switch(state.currentPage){
-    case'dashboard':content=renderDashboard();break;
-    case'materials':content=renderMaterials();break;
-    case'workflow':content=renderWorkflow();break;
-    case'tasks':content=renderTasks();break;
-    case'collect':content=renderCollect();break;
-  }
-  app.innerHTML=bgHTML+content;
-  updateTaskBadge();
-}
-function updateTaskBadge(){
-  const a=state.tasks.filter(t=>t.status==='processing'||t.status==='queue').length;
-  const b=$('#task-badge');if(a>0){b.style.display='';b.textContent=a}else{b.style.display='none'}
-}
-function toggleSourceFilter(s){const i=state.matSourceFilter.indexOf(s);if(i===-1)state.matSourceFilter.push(s);else state.matSourceFilter.splice(i,1);renderPage()}
-function toggleMatSelect(id){if(state.matSelected.has(id))state.matSelected.delete(id);else state.matSelected.add(id);renderPage()}
-function addSelectedToWorkflow(){if(!state.matSelected.size)return;state.wfSelectedMats=MATERIALS.filter(m=>state.matSelected.has(m.id));const kw={};state.wfSelectedMats.forEach(m=>{kw[m.keyword]=(kw[m.keyword]||0)+1});const top=Object.entries(kw).sort((a,b)=>b[1]-a[1])[0]?.[0];if(top&&THEMES.find(t=>t.name===top))state.wfTheme=top;state.wfStep=2;state.matSelected.clear();navigateTo('workflow');showToast(`已添加 ${state.wfSelectedMats.length} 条素材到工作流`)}
-function previewMaterial(id){
-  const m=MATERIALS.find(x=>x.id===id);
-  showModal(`<div class="relative"><button class="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70" onclick="closeModal()"><i class="fas fa-times text-sm"></i></button><div class="aspect-video bg-bg rounded-t-2xl overflow-hidden relative"><img src="${m.thumb}" class="w-full h-full object-cover"/><div class="absolute inset-0 bg-black/30 flex items-center justify-center"><div class="w-16 h-16 rounded-full bg-primary/30 backdrop-blur-sm flex items-center justify-center"><i class="fas fa-play text-white text-2xl ml-1"></i></div></div><div class="absolute bottom-0 left-0 right-0 h-1 bg-black/30"><div class="h-full bg-primary rounded-full" style="width:35%"></div></div></div><div class="p-5 space-y-3"><h3 class="text-lg font-semibold text-txt">${m.title}</h3><div class="grid grid-cols-4 gap-3"><div class="bg-surface rounded-lg p-2.5 text-center"><div class="text-xs text-txt-muted">时长</div><div class="text-sm text-txt font-medium mt-0.5">${fmtDur(m.duration)}</div></div><div class="bg-surface rounded-lg p-2.5 text-center"><div class="text-xs text-txt-muted">分辨率</div><div class="text-sm text-txt font-medium mt-0.5">${m.resolution}</div></div><div class="bg-surface rounded-lg p-2.5 text-center"><div class="text-xs text-txt-muted">大小</div><div class="text-sm text-txt font-medium mt-0.5">${m.size}MB</div></div><div class="bg-surface rounded-lg p-2.5 text-center"><div class="text-xs text-txt-muted">来源</div><div class="text-sm font-medium mt-0.5" style="color:${SOURCE_COLOR[m.source]}">${m.source}</div></div></div><div class="flex gap-1.5">${m.tags.map(t=>`<span class="text-xs px-2 py-1 rounded-md bg-surface text-txt-dim">${t}</span>`).join('')}</div><div class="flex gap-2 pt-2"><button class="btn-primary flex-1 py-2 rounded-lg text-sm" onclick="showToast('已开始下载','info');closeModal()"><i class="fas fa-download mr-1.5"></i>下载素材</button><button class="btn-outline flex-1 py-2 rounded-lg text-sm" onclick="closeModal();state.wfSelectedMats=[MATERIALS.find(x=>x.id===${m.id})];state.wfTheme='${m.keyword}';state.wfStep=2;navigateTo('workflow')"><i class="fas fa-plus mr-1.5"></i>加入工作流</button></div></div></div>`);
-}
-function selectTheme(name){state.wfTheme=name;state.wfSelectedMats=[];renderPage()}
-function addCustomTheme(){const input=$('#custom-theme-input');const name=input?.value?.trim();if(!name)return;if(THEMES.find(t=>t.name===name)){showToast('该主题已存在','error');return}THEMES.push({name,icon:'fa-tag',color:'#908090',keywords:[name]});AD_COPY[name]=[`${name}太棒了`,`推荐${name}`,`这个${name}绝了`,`一定要试试${name}`,`${name}值得拥有`];state.wfTheme=name;state.wfSelectedMats=[];input.value='';showToast(`已添加主题：${name}`);renderPage()}
-function toggleWFMat(id){const i=state.wfSelectedMats.findIndex(m=>m.id===id);if(i===-1)state.wfSelectedMats.push(MATERIALS.find(m=>m.id===id));else state.wfSelectedMats.splice(i,1);renderPage()}
-function moveWFMat(i,d){const j=i+d;if(j<0||j>=state.wfSelectedMats.length)return;[state.wfSelectedMats[i],state.wfSelectedMats[j]]=[state.wfSelectedMats[j],state.wfSelectedMats[i]];renderPage()}
-function removeWFMat(i){state.wfSelectedMats.splice(i,1);renderPage()}
-function goWFStep(step){if(step===2&&!state.wfTheme){showToast('请先选择主题','error');return}if(step===3&&state.wfSelectedMats.length<3){showToast('请至少选择3条素材','error');return}state.wfStep=step;renderPage()}
-function submitTask(){
-  const c=state.wfConfig;
-  const task={id:'task_'+Date.now(),name:`${state.wfTheme}_混剪_${new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}).replace(':','')}`,theme:state.wfTheme,matCount:state.wfSelectedMats.length,config:{count:c.output.count,duration:c.output.duration,ratio:c.output.ratio,resolution:c.output.resolution},subtitleConfig:{enabled:c.subtitle.enabled,position:c.subtitle.position,color:c.subtitle.color,stroke:c.subtitle.stroke,font:c.subtitle.font},status:'queue',progress:0,logText:'排队等待处理...',time:new Date().toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})};
-  state.tasks.unshift(task);showToast(`任务已提交：${c.output.count}条 × ${c.output.duration} 广告视频`);
-  setTimeout(()=>{task.status='processing';task.logText='正在分析素材...';renderPage()},2000);
-  setTimeout(()=>{task.progress=15;task.logText='正在生成配音...';renderPage()},4000);
-  setTimeout(()=>{task.progress=35;task.logText='正在混剪视频片段...';renderPage()},7000);
-  setTimeout(()=>{task.progress=55;task.logText='正在压制字幕...';renderPage()},10000);
-  setTimeout(()=>{task.progress=75;task.logText='正在混入配乐...';renderPage()},13000);
-  setTimeout(()=>{task.progress=90;task.logText='正在编码输出...';renderPage()},15000);
-  setTimeout(()=>{task.progress=100;task.status='done';task.logText='全部完成';showToast(`任务完成：${task.name}，共${c.output.count}条视频`);renderPage()},18000);
-  state.wfStep=1;state.wfTheme=null;state.wfSelectedMats=[];navigateTo('tasks');
-}
-function retryTask(id){const t=state.tasks.find(x=>x.id===id);if(!t)return;t.status='queue';t.progress=0;t.logText='重新排队...';showToast('任务已重新提交','info');renderPage();setTimeout(()=>{t.status='processing';t.logText='正在处理...';renderPage()},2000);setTimeout(()=>{t.progress=50;t.logText='正在混剪...';renderPage()},5000);setTimeout(()=>{t.progress=100;t.status='done';t.logText='全部完成';showToast('任务重试成功');renderPage()},9000)}
-function deleteTask(id){state.tasks=state.tasks.filter(t=>t.id!==id);showToast('任务已删除','info');renderPage()}
-function toggleCollectPlatform(p){const i=state.collectPlatforms.indexOf(p);if(i===-1)state.collectPlatforms.push(p);else state.collectPlatforms.splice(i,1);renderPage()}
-let collectInterval=null;
-function startCollect(){if(!state.collectKeywords.trim()){showToast('请输入搜索关键词','error');return}state.collecting=true;state.collectProgress=0;renderPage();collectInterval=setInterval(()=>{state.collectProgress+=Math.random()*8+2;if(state.collectProgress>=100){state.collectProgress=100;state.collecting=false;clearInterval(collectInterval);const kc=state.collectKeywords.split(',').filter(k=>k.trim()).length;showToast(`采集完成！预计新增约 ${kc*state.collectCount*state.collectPlatforms.length} 条素材`)}renderPage()},600)}
-function stopCollect(){state.collecting=false;clearInterval(collectInterval);showToast('采集已停止','info');renderPage()}
-
-// ===== 初始化 =====
-document.addEventListener('DOMContentLoaded',()=>{
-  $$('#sidebar-nav .sidebar-item').forEach(el=>el.addEventListener('click',()=>navigateTo(el.dataset.page)));
-  state.tasks.push(
-    {id:'task_demo1',name:'奶茶_混剪_1430',theme:'奶茶',matCount:5,config:{count:5,duration:'15s',ratio:'9:16',resolution:'1080p'},subtitleConfig:{enabled:true,position:'底部居中',color:'白色',stroke:true,font:'思源黑体'},status:'done',progress:100,logText:'全部完成',time:'01-15 14:30'},
-    {id:'task_demo2',name:'火锅_混剪_1120',theme:'火锅',matCount:4,config:{count:10,duration:'10s',ratio:'9:16',resolution:'1080p'},subtitleConfig:{enabled:true,position:'底部居中',color:'黄色',stroke:true,font:'思源黑体'},status:'done',progress:100,logText:'全部完成',time:'01-15 11:20'},
-    {id:'task_demo3',name:'护肤_混剪_1830',theme:'护肤',matCount:3,config:{count:3,duration:'20s',ratio:'16:9',resolution:'720p'},subtitleConfig:{enabled:false,position:'底部居中',color:'白色',stroke:false,font:'思源黑体'},status:'failed',progress:45,logText:'TTS服务超时',time:'01-14 18:30'},
-  );
-  renderPage();
 });
+
+// ========== 渲染素材池（Step2） ==========
+function renderPools() {
+  const available = document.getElementById('availablePool');
+  const selected = document.getElementById('selectedPool');
+  const selectedIds = [1, 4, 6];
+  available.innerHTML = materials.slice(0, 8).map(m => {
+    const added = selectedIds.includes(m.id);
+    let typeBadge = '';
+    if (m.analysisDone) {
+      typeBadge = `<span class="pool-type type-badge ${m.type}">${m.typeLabel}</span>`;
+    } else {
+      typeBadge = `<span class="pool-type type-badge pending">待分析</span>`;
+    }
+    return `<div class="pool-item ${added ? 'added' : ''}">
+      <div class="pool-thumb"><img src="${m.cover}" alt=""></div>
+      <div class="pool-info">
+        <p>${m.title}</p>
+        <span>${m.duration}s · ${m.width}×${m.height} · ${m.size}</span>
+      </div>
+      ${typeBadge}
+      <span class="add-icon">${added ? '<i class="fas fa-check"></i>' : '<i class="fas fa-plus"></i>'}</span>
+    </div>`;
+  }).join('');
+  selected.innerHTML = selectedIds.map((id, i) => {
+    const m = materials.find(x => x.id === id);
+    return `<div class="pool-item added">
+      <div class="sort-btns"><button><i class="fas fa-chevron-up"></i></button><button><i class="fas fa-chevron-down"></i></button></div>
+      <div class="pool-thumb"><img src="${m.cover}" alt=""></div>
+      <div class="pool-info"><p>${m.title}</p><span>${m.duration}s</span></div>
+      <span class="remove-btn"><i class="fas fa-times"></i></span>
+    </div>`;
+  }).join('');
+}
+
+// ========== 页面切换 ==========
+function switchPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const pageEl = document.getElementById('page-' + page);
+  if (pageEl) pageEl.classList.add('active');
+  const navEl = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (navEl) navEl.classList.add('active');
+}
+document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+  item.addEventListener('click', () => switchPage(item.dataset.page));
+});
+
+// ========== 步骤切换 ==========
+document.querySelectorAll('.step-item').forEach(step => {
+  step.addEventListener('click', function() {
+    const s = parseInt(this.dataset.step);
+    goToStep(s);
+  });
+});
+function goToStep(s) {
+  document.querySelectorAll('.step-item').forEach((st, i) => {
+    const idx = i + 1;
+    st.classList.remove('current', 'done');
+    if (idx < s) st.classList.add('done');
+    if (idx === s) st.classList.add('current');
+  });
+  document.querySelectorAll('.step-line').forEach((line, i) => {
+    line.classList.toggle('done', i < s - 1);
+  });
+  document.querySelectorAll('.step-content').forEach(sc => sc.classList.remove('active'));
+  const target = document.getElementById('step-' + s);
+  if (target) target.classList.add('active');
+}
+// Step1 主题选择
+document.querySelectorAll('.theme-card').forEach(card => {
+  card.addEventListener('click', function() {
+    document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+    this.classList.add('selected');
+  });
+});
+// Step1 下一步 → Step2
+document.querySelector('#step-1 .btn-primary').addEventListener('click', () => goToStep(2));
+document.querySelector('#step-2 .btn-outline').addEventListener('click', () => goToStep(1));
+document.querySelector('#step-2 .btn-primary').addEventListener('click', () => goToStep(3));
+document.querySelector('#step-3 .btn-outline').addEventListener('click', () => goToStep(2));
+document.querySelector('#step-3 .btn-primary').addEventListener('click', () => goToStep(4));
+document.querySelector('#step-4 .btn-outline').addEventListener('click', () => goToStep(3));
+
+// ========== 混剪风格卡片切换 ==========
+document.querySelectorAll('.style-card').forEach(card => {
+  card.addEventListener('click', function() {
+    this.parentElement.querySelectorAll('.style-card').forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+// ========== 变速倍率切换 ==========
+document.querySelectorAll('.speed-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    this.parentElement.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+// ========== 开关切换 ==========
+document.querySelectorAll('.switch[data-config]').forEach(sw => {
+  sw.addEventListener('click', function() { this.classList.toggle('on'); });
+});
+
+// ========== 成片预览模态框 ==========
+function openPreview() {
+  document.getElementById('previewModal').classList.add('show');
+}
+function closePreview() {
+  document.getElementById('previewModal').classList.remove('show');
+}
+document.getElementById('previewModal').addEventListener('click', function(e) {
+  if (e.target === this) closePreview();
+});
+// 产出列表切换
+document.querySelectorAll('.preview-list-item').forEach(item => {
+  item.addEventListener('click', function() {
+    document.querySelectorAll('.preview-list-item').forEach(i => i.classList.remove('active'));
+    this.classList.add('active');
+    // 模拟切换封面
+    const idx = parseInt(this.dataset.index);
+    const seeds = ['out1','out2','out3','out4','out5'];
+    const texts = ['这杯奶茶绝了','一口下去满嘴幸福','珍珠Q弹爽口','手打柠檬茶来了','夏日必喝清凉解暑'];
+    document.querySelector('.preview-video-frame img').src = `https://picsum.photos/seed/${seeds[idx]}/243/432.jpg`;
+    document.getElementById('subtitleText').textContent = texts[idx];
+    // 模拟不同剪辑方案
+    const plans = [
+      [{time:'00:00-00:03',name:'奶茶摇制过程',strategy:'speedup',label:'5x变速'},{time:'00:03-00:08',name:'倒奶茶特写',strategy:'cut_highlight',label:'截取高光'},{time:'00:08-00:11',name:'店面环境',strategy:'cut_mid',label:'原速截取'},{time:'00:11-00:13',name:'加料过程',strategy:'speedup',label:'3x变速'},{time:'00:13-00:15',name:'成品展示',strategy:'cut_highlight',label:'截取高光'}],
+      [{time:'00:00-00:04',name:'珍珠特写',strategy:'cut_highlight',label:'截取高光'},{time:'00:04-00:07',name:'摇杯动作',strategy:'speedup',label:'3x变速'},{time:'00:07-00:11',name:'顾客品尝',strategy:'cut_mid',label:'原速截取'},{time:'00:11-00:15',name:'门店招牌',strategy:'cut_mid',label:'原速截取'}],
+      [{time:'00:00-00:05',name:'手工制作',strategy:'cut_highlight',label:'截取高光'},{time:'00:05-00:08',name:'热气氛围',strategy:'cut_mid',label:'原速截取'},{time:'00:08-00:12',name:'加珍珠',strategy:'speedup',label:'5x变速'},{time:'00:12-00:15',name:'成品摆拍',strategy:'cut_highlight',label:'截取高光'}],
+      [{time:'00:00-00:03',name:'切柠檬',strategy:'speedup',label:'5x变速'},{time:'00:03-00:07',name:'捣柠檬',strategy:'cut_highlight',label:'截取高光'},{time:'00:07-00:11',name:'加冰块',strategy:'speedup',label:'3x变速'},{time:'00:11-00:15',name:'成品展示',strategy:'cut_mid',label:'原速截取'}],
+      [{time:'00:00-00:04',name:'店面全景',strategy:'cut_mid',label:'原速截取'},{time:'00:04-00:09',name:'制作过程',strategy:'cut_highlight',label:'截取高光'},{time:'00:09-00:12',name:'出杯动作',strategy:'speedup',label:'3x变速'},{time:'00:12-00:15',name:'产品特写',strategy:'cut_highlight',label:'截取高光'}],
+    ];
+    const panel = document.getElementById('editPlanPanel');
+    const plan = plans[idx];
+    let html = '<div class="epp-title"><i class="fas fa-scissors"></i>剪辑方案追溯</div>';
+    plan.forEach(seg => {
+      html += `<div class="epp-segment">
+        <div class="epp-time">${seg.time}</div>
+        <div class="epp-bar ${seg.strategy}"><div class="epp-fill"></div><span>${seg.name}</span></div>
+        <span class="epp-strategy ${seg.strategy}">${seg.label}</span>
+      </div>`;
+    });
+    panel.innerHTML = html;
+  });
+});
+
+// ========== 素材预览模态框 ==========
+function openMaterialModal(id) {
+  const m = materials.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('mmTitle').textContent = m.title;
+  document.getElementById('mmCover').src = m.cover.replace('200/267', '480/270');
+  // 高光条
+  const bar = document.getElementById('mmHighlightBar');
+  if (m.analysisDone && m.highlights && m.highlights.length > 0) {
+    bar.innerHTML = m.highlights.map(h => {
+      const left = (h.start / m.duration * 100).toFixed(1);
+      const width = ((h.end - h.start) / m.duration * 100).toFixed(1);
+      return `<div class="seg" style="left:${left}%;width:${width}%" title="${h.start}s - ${h.end}s 运动评分 ${h.score}"></div>`;
+    }).join('');
+    bar.style.display = 'block';
+  } else {
+    bar.style.display = 'none';
+  }
+  // 素材类型
+  const metaItems = document.querySelectorAll('.mm-meta-item');
+  if (metaItems[3]) {
+    if (m.analysisDone) {
+      metaItems[3].innerHTML = `<div class="mm-meta-val" style="color:var(--primary)">${m.typeLabel}</div><div class="mm-meta-label">素材类型</div>`;
+    } else {
+      metaItems[3].innerHTML = `<div class="mm-meta-val" style="color:var(--txt-muted);font-style:italic">待分析</div><div class="mm-meta-label">素材类型</div>`;
+    }
+  }
+  document.getElementById('materialModal').classList.add('show');
+}
+function closeMaterialModal() {
+  document.getElementById('materialModal').classList.remove('show');
+}
+document.getElementById('materialModal').addEventListener('click', function(e) {
+  if (e.target === this) closeMaterialModal();
+});
+
+// ========== Toast提示 ==========
+function showToast(msg) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `<i class="fas fa-check-circle" style="color:var(--primary)"></i><span>${msg}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(60px)'; toast.style.transition = 'all .3s ease'; }, 2500);
+  setTimeout(() => toast.remove(), 2800);
+}
+
+// ========== 任务标签页切换 ==========
+document.querySelectorAll('.task-tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.task-tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+
+// ========== 初始化 ==========
+renderMaterials('all');
+renderPools();
 </script>
 </body>
 </html>
